@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Slide-Based MCQ Whiteboard | PDF + Images + Drawing + Telegram</title>
+  <title>Slide-Based MCQ Whiteboard | Auto-Draw on Upload</title>
   <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
@@ -195,7 +195,7 @@
     <input type="file" id="pdfUpload" accept=".pdf" style="display:none">
     <label for="pdfUpload" class="file-label">📄 PDF</label>
     <input type="file" id="quizUpload" accept=".txt" style="display:none">
-    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 Slides (|Q| format)</label>
+    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 Upload MCQ Slides</label>
     <input type="file" id="imageUpload" accept="image/*" style="display:none">
     <label for="imageUpload" class="file-label" style="background:#16a085;">🖼️ Add Image</label>
     <input type="file" id="zipUpload" accept=".zip" style="display:none">
@@ -462,7 +462,7 @@
   }
   
   function drawSlideOnCanvas(slide, index) {
-    // Clear drawing layers for new slide (keep strokes separate per slide)
+    // Clear drawing layers for new slide
     mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height);
     topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height);
     currentStrokes = [];
@@ -516,12 +516,15 @@
     slides.forEach((slide, idx) => {
       const thumb = document.createElement('div');
       thumb.className = 'slide-thumb' + (idx === currentSlideIndex ? ' active' : '');
-      thumb.textContent = `Slide ${idx+1}`;
+      // Get first few words of question for thumbnail
+      const shortQ = slide.q.substring(0, 25) + (slide.q.length > 25 ? '...' : '');
+      thumb.textContent = `${idx+1}: ${shortQ}`;
       thumb.onclick = () => { currentSlideIndex = idx; updateSlideDisplay(); };
       container.appendChild(thumb);
     });
   }
   
+  // FIXED: Auto-draw when file is uploaded
   document.getElementById('quizUpload').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if(!file) return;
@@ -531,9 +534,9 @@
       slides = parseSlides(content);
       if(slides.length) {
         currentSlideIndex = 0;
-        updateSlideDisplay();
+        updateSlideDisplay();  // This draws the first slide automatically
         document.getElementById('slidePanel').style.display = 'flex';
-        showToast(`${slides.length} slides loaded! Use navigator to switch.`);
+        showToast(`${slides.length} slides loaded! Slide 1 drawn on canvas. Use ◀ ▶ to navigate.`);
       } else {
         showToast('No valid slides found! Use |Q| format with ### separator', true);
       }
