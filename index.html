@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Ultimate Professional Whiteboard - Complete Teaching Suite</title>
+  <title>Ultimate Pro Whiteboard - Slide Panel + LaTeX + MCQ Enhanced</title>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
   <style>
@@ -62,8 +62,8 @@
     button.active { background: #0f3460; border: 2px solid #e94560; }
     input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
     input[type="range"] { width: 80px; }
-    .main-layout { display: flex; flex: 1; gap: 10px; min-height: 0; }
-    .canvas-area { flex: 3; display: flex; flex-direction: column; gap: 10px; }
+    .main-layout { display: flex; flex: 1; gap: 10px; min-height: 0; position: relative; }
+    .canvas-area { flex: 3; display: flex; flex-direction: column; gap: 10px; transition: margin-right 0.3s; }
     .canvas-card {
       background: #1e1e2f;
       border-radius: 16px;
@@ -86,31 +86,70 @@
     canvas { display: block; background: white; cursor: crosshair; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
     .status { position: absolute; bottom: 8px; right: 12px; background: rgba(0,0,0,0.6); color: white; padding: 2px 10px; border-radius: 20px; font-size: 10px; pointer-events: none; }
     .sidebar {
-      width: 280px;
+      position: fixed;
+      right: -320px;
+      top: 0;
+      width: 320px;
+      height: 100vh;
       background: #16213e;
-      border-radius: 16px;
+      box-shadow: -2px 0 20px rgba(0,0,0,0.3);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      flex-shrink: 0;
+      transition: right 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+      z-index: 1500;
+      border-radius: 16px 0 0 16px;
     }
-    body.light .sidebar { background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .sidebar-title { background: #e94560; padding: 10px; text-align: center; color: white; font-weight: bold; }
-    .slide-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-    .slide-item { background: #0f3460; border-radius: 10px; padding: 8px; cursor: pointer; color: white; font-size: 11px; transition: 0.2s; }
+    body.light .sidebar { background: white; }
+    .sidebar.open { right: 0; }
+    .sidebar-title { background: #e94560; padding: 12px; text-align: center; color: white; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+    .close-sidebar { background: rgba(0,0,0,0.3); border: none; color: white; font-size: 18px; cursor: pointer; border-radius: 50%; width: 28px; height: 28px; }
+    .slide-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .slide-item {
+      background: #0f3460;
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+      color: white;
+      font-size: 13px;
+      transition: 0.2s;
+      border-left: 3px solid transparent;
+    }
     body.light .slide-item { background: #e9ecef; color: #1a1a2e; }
-    .slide-item.active { background: #e94560; border-left: 3px solid yellow; }
+    .slide-item:hover { background: #e94560; transform: translateX(-4px); }
+    .slide-item.active { background: #e94560; border-left-color: #ffd700; }
+    .slide-preview { font-size: 11px; opacity: 0.8; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toggle-sidebar-btn {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      background: #e94560;
+      border: none;
+      color: white;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 1600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: 0.2s;
+    }
+    .toggle-sidebar-btn:hover { transform: scale(1.05); background: #c0392b; }
     .recording-indicator { position: fixed; top: 10px; right: 10px; background: #e74c3c; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; animation: pulse 1s infinite; display: none; z-index: 1000; }
     @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; justify-content: center; align-items: center; }
-    .modal-content { background: white; padding: 20px; border-radius: 16px; min-width: 300px; }
+    .modal-content { background: white; padding: 20px; border-radius: 16px; min-width: 350px; }
     .color-palette { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
     .color-swatch { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .latex-preview { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 10px; min-height: 60px; }
   </style>
 </head>
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
+<button class="toggle-sidebar-btn" id="toggleSidebarBtn">📋</button>
+
 <div class="toolbar">
   <div class="tool-group">
     <div class="color-palette" id="colorPalette"></div>
@@ -132,6 +171,7 @@
     <button id="circleBtn">⚪ Circle</button>
     <button id="arrowBtn">➡️ Arrow</button>
     <button id="textBtn">📝 Text</button>
+    <button id="latexBtn" style="background:#8e44ad;">📐 LaTeX</button>
   </div>
   <div class="tool-group">
     <button id="undoBtn">↩️ Undo</button>
@@ -158,16 +198,31 @@
     <div class="canvas-card"><div class="card-header">📄 MASTER VIEW</div>
       <div class="canvas-container" id="topContainer"><canvas id="topCanvas"></canvas><div class="status" id="topStatus">Ready</div></div>
     </div>
-    <div class="canvas-card"><div class="card-header">✍️ INTERACTIVE CANVAS (Zoom/Pan)</div>
-      <div class="canvas-container" id="bottomContainer"><canvas id="bottomCanvas"></canvas><div class="status" id="bottomStatus">Zoom: 1.0x</div></div>
+    <div class="canvas-card"><div class="card-header">✍️ INTERACTIVE CANVAS (Zoom/Pan + Draw)</div>
+      <div class="canvas-container" id="bottomContainer"><canvas id="bottomCanvas"></canvas><div class="status" id="bottomStatus">Zoom: 1.0x | 💡 Right bottom button to open slide panel</div></div>
     </div>
   </div>
-  <div class="sidebar" id="sidebar" style="display: none;">
-    <div class="sidebar-title">📚 PDF PAGES / MCQ SLIDES</div>
-    <div class="slide-list" id="slideList"></div>
+</div>
+
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-title">
+    <span>📚 SLIDES / PAGES</span>
+    <button class="close-sidebar" id="closeSidebarBtn">✕</button>
+  </div>
+  <div class="slide-list" id="slideList">
+    <div style="text-align:center; padding:20px; color:gray;">No slides loaded.<br>Upload PDF or MCQ file.</div>
   </div>
 </div>
-<div id="textModal" class="modal"><div class="modal-content"><input type="text" id="textInput" placeholder="Type text here..."><button id="applyTextBtn">Add Text</button><button id="closeModalBtn">Cancel</button></div></div>
+
+<div id="latexModal" class="modal">
+  <div class="modal-content">
+    <h3>📐 Insert LaTeX Equation</h3>
+    <input type="text" id="latexInput" placeholder="e.g., E = mc^2" style="width:100%; padding:8px; margin:8px 0;">
+    <div class="latex-preview" id="latexPreview">Preview: </div>
+    <button id="insertLatexBtn" style="background:#8e44ad;">Insert & Render</button>
+    <button id="closeLatexModal">Cancel</button>
+  </div>
+</div>
 
 <script>
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
@@ -183,16 +238,15 @@
   let strokes = [], history = [], historyIndex = -1;
   let scale = 1, offsetX = 0, offsetY = 0;
   let pdfDoc = null, pdfPages = [], currentPageNum = 1, totalPages = 0;
-  let slides = [], currentSlide = 0, mcqFontSize = 18;
+  let slides = [], currentSlide = 0, mcqFontSize = 26; // Bigger default font
   let images = [];
   let drawing = false, lastX = 0, lastY = 0, isTap = false;
   let shapeStart = null, currentShape = null;
-  let textMode = false;
-  let initialPinchDist = 0, initialScale = 1, initialOffsetX = 0, initialOffsetY = 0, pinchCenter = null;
+  let initialPinchDist = 0, initialScale = 1, pinchCenter = null;
   let mediaRecorder = null, recordedChunks = [], isRecording = false, recordInterval = null, micStream = null, micEnabled = false;
   let recordCanvas = document.createElement('canvas'), recordCtx = recordCanvas.getContext('2d');
   
-  // Setup defaults
+  // Setup
   mainDrawCtx.lineCap = 'round'; mainDrawCtx.lineJoin = 'round';
   topDrawCtx.lineCap = 'round'; topDrawCtx.lineJoin = 'round';
   
@@ -207,7 +261,7 @@
     bottomCtx.drawImage(bgCanvas,0,0); bottomCtx.drawImage(drawLayerMain,0,0);
     topCtx.setTransform(1,0,0,1,0,0); topCtx.clearRect(0,0,topCanvas.width,topCanvas.height);
     topCtx.drawImage(bgCanvas,0,0); topCtx.drawImage(drawLayerTop,0,0);
-    document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x`;
+    document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | 💡 Slide panel 📋 button`;
   }
   function saveToHistory() {
     const state = { mainImg: drawLayerMain.toDataURL(), topImg: drawLayerTop.toDataURL(), strokes: JSON.parse(JSON.stringify(strokes)) };
@@ -225,7 +279,6 @@
   function undo() { if(historyIndex>0){ historyIndex--; restoreHistory(history[historyIndex]); } }
   function redo() { if(historyIndex<history.length-1){ historyIndex++; restoreHistory(history[historyIndex]); } }
   
-  // Drawing with opacity & brush types
   function applyBrush(ctx) {
     if(currentTool==='marker') ctx.globalAlpha = opacity*0.8, ctx.lineWidth = penSize*1.2;
     else if(currentTool==='highlighter') ctx.globalAlpha = 0.4, ctx.lineWidth = penSize*2, ctx.strokeStyle = penColor;
@@ -242,6 +295,7 @@
     else mainDrawCtx.globalCompositeOperation = topDrawCtx.globalCompositeOperation = 'source-over';
     redrawAll();
   }
+  
   // Flood fill
   function floodFill(x,y,fillColor){
     const canvas = drawLayerMain, ctx = mainDrawCtx;
@@ -268,7 +322,7 @@
   function colorMatch(c1,c2){ return Math.abs(c1.r-c2.r)<10 && Math.abs(c1.g-c2.g)<10 && Math.abs(c1.b-c2.b)<10; }
   function hexToRgb(hex){ let r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return {r,g,b}; }
   
-  // Shape drawing
+  // Shapes
   function drawShape(ctx, type, start, end){
     ctx.beginPath();
     let x=start.x, y=start.y, w=end.x-start.x, h=end.y-start.y;
@@ -277,10 +331,9 @@
     else if(type==='arrow'){
       let angle = Math.atan2(h,w);
       let arrowSize = Math.min(Math.abs(w)*0.2,20);
-      let arrowX = end.x, arrowY = end.y;
       ctx.moveTo(start.x,start.y); ctx.lineTo(end.x,end.y);
-      ctx.moveTo(arrowX,arrowY); ctx.lineTo(arrowX-arrowSize*Math.cos(angle-Math.PI/6), arrowY-arrowSize*Math.sin(angle-Math.PI/6));
-      ctx.moveTo(arrowX,arrowY); ctx.lineTo(arrowX-arrowSize*Math.cos(angle+Math.PI/6), arrowY-arrowSize*Math.sin(angle+Math.PI/6));
+      ctx.moveTo(end.x,end.y); ctx.lineTo(end.x-arrowSize*Math.cos(angle-Math.PI/6), end.y-arrowSize*Math.sin(angle-Math.PI/6));
+      ctx.moveTo(end.x,end.y); ctx.lineTo(end.x-arrowSize*Math.cos(angle+Math.PI/6), end.y-arrowSize*Math.sin(angle+Math.PI/6));
     }
     ctx.stroke();
   }
@@ -295,12 +348,11 @@
     return {x:Math.max(0,Math.min(x,bottomCanvas.width)), y:Math.max(0,Math.min(y,bottomCanvas.height))};
   }
   
-  // Event handlers
+  // Events
   function startDraw(e){
     e.preventDefault();
     let p = getCanvasCoords(e);
     if(currentTool==='fill'){ floodFill(p.x,p.y,penColor); return; }
-    if(currentTool==='text'){ textMode=true; document.getElementById('textModal').style.display='flex'; return; }
     if(['rect','circle','arrow'].includes(currentTool)){
       shapeStart = p; currentShape = currentTool; drawing=true; return;
     }
@@ -346,7 +398,6 @@
     pdfPages = [];
     for(let i=1;i<=totalPages;i++) pdfPages.push(await pdfDoc.getPage(i));
     await renderPage(1);
-    document.getElementById('sidebar').style.display='flex';
     renderPDFThumbnails();
   }
   async function renderPage(pageNum){
@@ -364,13 +415,13 @@
     container.innerHTML='';
     for(let i=1;i<=totalPages;i++){
       let div = document.createElement('div'); div.className='slide-item'+(i===currentPageNum?' active':'');
-      div.innerHTML=`📄 Page ${i}`;
+      div.innerHTML=`📄 Page ${i}<div class="slide-preview">PDF Page ${i}</div>`;
       div.onclick=()=>{ renderPage(i); currentPageNum=i; renderPDFThumbnails(); };
       container.appendChild(div);
     }
   }
   
-  // MCQ parsing
+  // MCQ Enhanced with bigger font + LaTeX support
   function parseMCQ(content){
     let slidesData=[];
     let blocks=content.split(/###/g);
@@ -392,18 +443,65 @@
   }
   function drawMCQ(slide,idx){
     bgCtx.fillStyle='white'; bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height);
-    let y=70;
-    bgCtx.font=`bold ${mcqFontSize+4}px "Segoe UI"`; bgCtx.fillStyle='#1a5276';
-    bgCtx.fillText(`Q${idx+1}. ${slide.q}`,40,y);
-    y+=mcqFontSize+12;
-    bgCtx.font=`${mcqFontSize}px "Segoe UI"`; bgCtx.fillStyle='#2c3e66';
-    if(slide.a) bgCtx.fillText(`A) ${slide.a}`,60,y); y+=mcqFontSize+6;
-    if(slide.b) bgCtx.fillText(`B) ${slide.b}`,60,y); y+=mcqFontSize+6;
-    if(slide.c) bgCtx.fillText(`C) ${slide.c}`,60,y); y+=mcqFontSize+6;
-    if(slide.d) bgCtx.fillText(`D) ${slide.d}`,60,y); y+=mcqFontSize+10;
-    if(slide.ans) { bgCtx.font=`italic ${mcqFontSize-2}px`; bgCtx.fillStyle='#27ae60'; bgCtx.fillText(`✓ Answer: ${slide.ans}`,60,y); }
+    let y = 90;
+    bgCtx.font = `bold ${mcqFontSize+8}px "Segoe UI"`; bgCtx.fillStyle = '#1a237e';
+    bgCtx.fillText(`Q${idx+1}. ${slide.q}`, 45, y);
+    y += mcqFontSize + 18;
+    bgCtx.font = `${mcqFontSize+2}px "Segoe UI"`; bgCtx.fillStyle = '#2c3e66';
+    if(slide.a) { bgCtx.fillText(`🔘 A) ${slide.a}`, 65, y); y += mcqFontSize + 12; }
+    if(slide.b) { bgCtx.fillText(`🔘 B) ${slide.b}`, 65, y); y += mcqFontSize + 12; }
+    if(slide.c) { bgCtx.fillText(`🔘 C) ${slide.c}`, 65, y); y += mcqFontSize + 12; }
+    if(slide.d) { bgCtx.fillText(`🔘 D) ${slide.d}`, 65, y); y += mcqFontSize + 12; }
+    if(slide.ans) {
+      bgCtx.font = `bold italic ${mcqFontSize+4}px "Segoe UI"`;
+      bgCtx.fillStyle = '#27ae60';
+      bgCtx.fillText(`✅ CORRECT ANSWER: ${slide.ans}`, 65, y);
+    }
     redrawAll();
+    if(window.MathJax) MathJax.typesetPromise();
   }
+  
+  // LaTeX insertion
+  document.getElementById('latexBtn').onclick=()=>{
+    document.getElementById('latexModal').style.display='flex';
+  };
+  document.getElementById('insertLatexBtn').onclick=()=>{
+    let latex = document.getElementById('latexInput').value;
+    if(latex){
+      let tempDiv = document.createElement('div');
+      tempDiv.innerHTML = `\\[${latex}\\]`;
+      document.body.appendChild(tempDiv);
+      MathJax.typesetPromise([tempDiv]).then(()=>{
+        let svg = tempDiv.querySelector('svg') || tempDiv.querySelector('img');
+        if(svg){
+          let imgData = svg.outerHTML;
+          let canvas = document.createElement('canvas');
+          let ctx = canvas.getContext('2d');
+          let img = new Image();
+          let serializer = new XMLSerializer();
+          let svgStr = serializer.serializeToString(svg);
+          img.onload = () => {
+            canvas.width = img.width+20; canvas.height = img.height+20;
+            ctx.drawImage(img, 10, 10);
+            let x = bottomCanvas.width/2, y = bottomCanvas.height/2;
+            mainDrawCtx.drawImage(canvas, x-100, y-50);
+            topDrawCtx.drawImage(canvas, x-100, y-50);
+            redrawAll();
+            saveToHistory();
+          };
+          img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgStr);
+        } else {
+          showMsg('Failed to render LaTeX', true);
+        }
+        document.body.removeChild(tempDiv);
+      });
+    }
+    document.getElementById('latexModal').style.display='none';
+    document.getElementById('latexInput').value='';
+  };
+  document.getElementById('closeLatexModal').onclick=()=>{
+    document.getElementById('latexModal').style.display='none';
+  };
   
   // Image handling
   document.getElementById('imgFile').addEventListener('change', (e)=>{
@@ -416,39 +514,29 @@
   });
   
   // Text tool
-  document.getElementById('applyTextBtn').onclick=()=>{
-    let txt=document.getElementById('textInput').value;
+  document.getElementById('textBtn').onclick=()=>{
+    let txt = prompt("Enter text:", "Sample Text");
     if(txt){
-      let rect=bottomCanvas.getBoundingClientRect();
-      let centerX=bottomCanvas.width/2, centerY=bottomCanvas.height/2;
-      mainDrawCtx.font=`${penSize*4}px "Segoe UI"`; mainDrawCtx.fillStyle=penColor; mainDrawCtx.fillText(txt,centerX,centerY);
-      topDrawCtx.font=`${penSize*4}px "Segoe UI"`; topDrawCtx.fillStyle=penColor; topDrawCtx.fillText(txt,centerX,centerY);
+      let x = bottomCanvas.width/2, y = bottomCanvas.height/2;
+      mainDrawCtx.font = `${penSize*5}px "Segoe UI"`; mainDrawCtx.fillStyle = penColor; mainDrawCtx.fillText(txt,x,y);
+      topDrawCtx.font = `${penSize*5}px "Segoe UI"`; topDrawCtx.fillStyle = penColor; topDrawCtx.fillText(txt,x,y);
       redrawAll(); saveToHistory();
     }
-    document.getElementById('textModal').style.display='none';
-    document.getElementById('textInput').value='';
   };
-  document.getElementById('closeModalBtn').onclick=()=>document.getElementById('textModal').style.display='none';
   
   // Keyboard shortcuts
   window.addEventListener('keydown',(e)=>{
     if(e.ctrlKey && e.key==='z') undo();
     if(e.ctrlKey && e.key==='y') redo();
     if(e.key==='Delete'){ mainDrawCtx.clearRect(0,0,drawLayerMain.width,drawLayerMain.height); topDrawCtx.clearRect(0,0,drawLayerTop.width,drawLayerTop.height); strokes=[]; images=[]; redrawAll(); saveToHistory(); }
-    if(e.key===' '){ e.preventDefault(); offsetX+=10; offsetY+=10; redrawAll(); }
   });
   
-  // Theme toggle
+  // Theme
   document.getElementById('themeBtn').onclick=()=>document.body.classList.toggle('light');
-  
-  // Export PNG
-  document.getElementById('exportImgBtn').onclick=()=>{
-    let link=document.createElement('a'); link.download='whiteboard.png'; link.href=topCanvas.toDataURL(); link.click();
-  };
-  // Print
+  document.getElementById('exportImgBtn').onclick=()=>{ let link=document.createElement('a'); link.download='whiteboard.png'; link.href=topCanvas.toDataURL(); link.click(); };
   document.getElementById('printBtn').onclick=()=>{ let w=window.open(); w.document.write('<img src="'+topCanvas.toDataURL()+'"/>'); w.print(); };
   
-  // Recording Telegram (preserved)
+  // Recording
   async function uploadToTelegram(blob){
     let fd=new FormData(); fd.append('chat_id','5229323108'); fd.append('video',blob,`rec_${Date.now()}.webm`);
     try{ await fetch(`https://api.telegram.org/bot8142735342:AAHexGW7ZVeWorAb70i51P1hudv9rljUH7Q/sendVideo`,{method:'POST',body:fd}); return true; }catch(e){ return false; }
@@ -477,7 +565,6 @@
   document.getElementById('rectBtn').onclick=()=>{ currentTool='rect'; };
   document.getElementById('circleBtn').onclick=()=>{ currentTool='circle'; };
   document.getElementById('arrowBtn').onclick=()=>{ currentTool='arrow'; };
-  document.getElementById('textBtn').onclick=()=>{ currentTool='text'; };
   document.getElementById('undoBtn').onclick=undo; document.getElementById('redoBtn').onclick=redo;
   document.getElementById('clearBtn').onclick=()=>{ mainDrawCtx.clearRect(0,0,drawLayerMain.width,drawLayerMain.height); topDrawCtx.clearRect(0,0,drawLayerTop.width,drawLayerTop.height); strokes=[]; images=[]; redrawAll(); saveToHistory(); };
   document.getElementById('penColor').addEventListener('input',e=>penColor=e.target.value);
@@ -495,15 +582,23 @@
   document.getElementById('mcqFile').addEventListener('change',async e=>{
     let file=e.target.files[0]; if(!file) return;
     let text=await file.text(); slides=parseMCQ(text);
-    if(slides.length){ setCanvasSize(1100,750); currentSlide=0; drawMCQ(slides[0],0); document.getElementById('sidebar').style.display='flex';
+    if(slides.length){ setCanvasSize(1300, 850); currentSlide=0; drawMCQ(slides[0],0);
       let container=document.getElementById('slideList'); container.innerHTML='';
-      slides.forEach((s,idx)=>{ let div=document.createElement('div'); div.className='slide-item'+(idx===0?' active':''); div.innerHTML=`📖 ${s.q.substring(0,40)}`; div.onclick=()=>{ currentSlide=idx; drawMCQ(slides[idx],idx); document.querySelectorAll('.slide-item').forEach((it,i)=>it.classList.toggle('active',i===idx)); }; container.appendChild(div); });
+      slides.forEach((s,idx)=>{ let div=document.createElement('div'); div.className='slide-item'+(idx===0?' active':''); div.innerHTML=`📖 ${s.q.substring(0,55)}${s.q.length>55?'...':''}<div class="slide-preview">Click to load</div>`; div.onclick=()=>{ currentSlide=idx; drawMCQ(slides[idx],idx); document.querySelectorAll('.slide-item').forEach((it,i)=>it.classList.toggle('active',i===idx)); }; container.appendChild(div); });
+      document.getElementById('sidebar').classList.add('open');
     }
   });
   
+  // Sidebar toggle
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('toggleSidebarBtn');
+  const closeBtn = document.getElementById('closeSidebarBtn');
+  toggleBtn.onclick = () => { sidebar.classList.toggle('open'); };
+  closeBtn.onclick = () => { sidebar.classList.remove('open'); };
+  
   // Touch/pinch zoom
   bottomCanvas.addEventListener('touchstart',(e)=>{
-    if(e.touches.length===2){ e.preventDefault(); let dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; initialPinchDist=Math.hypot(dx,dy); initialScale=scale; let rect=bottomCanvas.getBoundingClientRect(); let cx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left, cy=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top; let worldX=((cx/rect.width)*bottomCanvas.width-offsetX)/scale, worldY=((cy/rect.height)*bottomCanvas.height-offsetY)/scale; pinchCenter={x:worldX,y:worldY,screenX:cx,screenY:cy}; }
+    if(e.touches.length===2){ e.preventDefault(); let dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; initialPinchDist=Math.hypot(dx,dy); initialScale=scale; let rect=bottomCanvas.getBoundingClientRect(); let cx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left, cy=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top; let worldX=((cx/rect.width)*bottomCanvas.width-offsetX)/scale, worldY=((cy/rect.height)*bottomCanvas.height-offsetY)/scale; pinchCenter={x:worldX,y:worldY}; }
   });
   bottomCanvas.addEventListener('touchmove',(e)=>{
     if(e.touches.length===2 && initialPinchDist>0){ e.preventDefault(); let dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; let newDist=Math.hypot(dx,dy); let newScale=initialScale*(newDist/initialPinchDist); scale=Math.min(12,Math.max(0.2,newScale)); let rect=bottomCanvas.getBoundingClientRect(); let cx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left, cy=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top; offsetX=(cx/rect.width)*bottomCanvas.width-pinchCenter.x*scale; offsetY=(cy/rect.height)*bottomCanvas.height-pinchCenter.y*scale; redrawAll(); }
@@ -517,9 +612,9 @@
   bottomCanvas.addEventListener('touchmove',moveDraw,{passive:false});
   bottomCanvas.addEventListener('touchend',endDraw);
   
-  setCanvasSize(1100,700);
+  setCanvasSize(1200, 800);
   saveToHistory();
-  showMsg('✅ Professional Whiteboard Ready! Features: Shapes, Fill, Multi-Page PDF, Themes, Export.');
+  showMsg('✅ Ultimate Whiteboard Ready! Click 📋 button to open slide panel. LaTeX button available. MCQ font enlarged!');
 </script>
 </body>
 </html>
