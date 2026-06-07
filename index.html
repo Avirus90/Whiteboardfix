@@ -1,1915 +1,623 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PDF Whiteboard - Sync Drawing with Recording + Telegram Storage</title>
-  
-  <!-- MathJax for Math Equations -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Advanced Whiteboard | PDF + MCQ + Images + LaTeX</title>
   <script>
     window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true
-      }
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true }
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
-  
-  <!-- QR Code Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
-    /* ... (same CSS as before, no changes needed) ... */
+    * { box-sizing: border-box; user-select: none; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #eef2f7;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .toolbar {
+      background: white;
+      border-radius: 16px;
+      padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      flex-shrink: 0;
+    }
+    .tool-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      background: #f8f9fc;
+      padding: 4px 10px;
+      border-radius: 30px;
+    }
+    button, .file-label {
+      background: #1e88e5;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 30px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+      transition: 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    button:hover, .file-label:hover { filter: brightness(0.92); transform: scale(0.96); }
+    button.secondary { background: #e2e6ea; color: #1e2a3e; }
+    button.active { background: #2c3e66; }
+    button.adj-active { background: #f39c12; }
+    .telegram-btn { background: #0088cc; }
+    .danger-btn { background: #e74c3c; }
+    .success-btn { background: #2ecc71; }
+    input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; }
+    .board-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      gap: 12px;
+      min-height: 0;
+    }
+    .board-card {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex: 1;
+    }
+    .board-header {
+      padding: 8px 14px;
+      background: #fef9e6;
+      font-weight: bold;
+      border-bottom: 2px solid #ffd966;
+      font-size: 13px;
+    }
+    .canvas-holder {
+      position: relative;
+      flex: 1;
+      background: #f0f2f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    canvas {
+      display: block;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      background: white;
+      cursor: crosshair;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .status-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      padding: 3px 10px;
+      border-radius: 30px;
+      font-size: 10px;
+      pointer-events: none;
+    }
+    .image-toolbar {
+      background: #f0f0f0;
+      padding: 4px 10px;
+      border-radius: 30px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top:0;left:0;width:100%;height:100%;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80%;
+      overflow: auto;
+    }
+    .quiz-item {
+      background: #f8f9fa;
+      margin: 10px 0;
+      padding: 12px;
+      border-radius: 12px;
+      border-left: 4px solid #1e88e5;
+    }
+    .option { margin: 5px 0 5px 20px; }
+    .recording-indicator {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      background: #e74c3c;
+      color: white;
+      padding: 5px 15px;
+      border-radius: 30px;
+      font-weight: bold;
+      animation: pulse 1s infinite;
+      display: none;
+      z-index: 1500;
+      font-size: 12px;
+    }
+    @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
+    .mic-status { position: fixed; bottom: 15px; left: 15px; background: #27ae60; color: white; padding: 5px 12px; border-radius: 30px; font-size: 11px; display: none; z-index: 1500; }
   </style>
 </head>
 <body>
 
-<!-- Hidden Canvas for Recording -->
-<canvas id="recordingCanvas"></canvas>
-
-<!-- Recording Indicator -->
-<div class="recording-indicator" id="recordingIndicator">
-  🔴 RECORDING TO TELEGRAM
-</div>
-
-<!-- Mic Status Indicator -->
-<div id="micStatusIndicator"></div>
-
-<!-- QR Code Modal -->
-<div class="modal" id="qrModal">
-  <div class="modal-content">
-    <h3>📱 Mobile Access</h3>
-    <p>Scan QR to access recordings in Telegram:</p>
-    <div id="qrCodeContainer"></div>
-    <p style="margin: 10px 0; color: #666;">
-      Or open: <strong>t.me/WB27_bot</strong>
-    </p>
-    <button onclick="closeModal('qrModal')" style="padding: 8px 15px; background: #0088cc; color: white; border: none; border-radius: 5px; cursor: pointer;">
-      ✅ Done
-    </button>
-  </div>
-</div>
-
-<!-- Telegram Storage Panel -->
-<div class="telegram-panel" id="telegramPanel">
-  <div class="telegram-status">
-    <span>☁️ Telegram Storage: </span>
-    <span id="telegramStatusText">Checking connection...</span>
-  </div>
-  <div>
-    <button onclick="showQRCode()" style="background: white; color: #0088cc; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">
-      📱 Open in Telegram
-    </button>
-  </div>
-</div>
+<div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
+<div id="micStatusToast" class="mic-status"></div>
 
 <div class="toolbar">
-  <div class="control-group">
-    <input type="color" id="color" value="#000000" title="Pen Color">
-    <input type="range" id="brushSize" min="1" max="40" value="3" title="Brush Size">
-    <span id="brushSizeValue">3px</span>
-  </div>
-  
   <div class="tool-group">
-    <button id="drawBtn" class="active">✏️ Draw</button>
-    <button id="eraseBtn" class="secondary">🧽 Eraser</button>
-    <button id="smartEraseBtn" class="secondary">🎯 Smart Erase</button>
-    <button id="clearBtn" class="secondary clear-active">🗑️ Clear</button>
+    <input type="color" id="penColor" value="#000000">
+    <input type="range" id="brushWidth" min="1" max="40" value="3">
+    <span id="sizeLabel">3px</span>
+  </div>
+  <div class="tool-group">
+    <button id="drawModeBtn" class="active">✏️ Draw</button>
+    <button id="eraserBtn">🧽 Eraser</button>
+    <button id="smartEraseBtn">🎯 Smart Erase</button>
+    <button id="clearAllBtn" class="secondary">🗑️ Clear</button>
     <button id="undoBtn" class="secondary">↩️ Undo</button>
     <button id="redoBtn" class="secondary">↪️ Redo</button>
-    <button id="adjBtn" class="secondary">🔧 ADJ</button>
-    <button id="syncBtn" class="secondary">🔄 SYNC</button>
-    <button id="resetAdjBtn" class="secondary">🔄 Reset ADJ</button>
   </div>
-  
-  <!-- Microphone Controls -->
   <div class="tool-group">
-    <button id="micTestBtn" class="telegram-btn" style="background: #4caf50;">
-      🎤 Test Microphone
-    </button>
-    <button id="enableMicBtn" class="telegram-btn" style="background: #2196f3;">
-      🔊 Enable Microphone
-    </button>
+    <input type="file" id="pdfUpload" accept=".pdf" style="display:none">
+    <label for="pdfUpload" class="file-label">📄 PDF</label>
+    <input type="file" id="quizUpload" accept=".txt,.quiz" style="display:none">
+    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 MCQ/TXT</label>
+    <input type="file" id="imageUpload" accept="image/*" style="display:none">
+    <label for="imageUpload" class="file-label" style="background:#16a085;">🖼️ Add Image</label>
+    <input type="file" id="zipUpload" accept=".zip" style="display:none">
+    <label for="zipUpload" class="file-label" style="background:#8e44ad;">📦 ZIP (Images)</label>
   </div>
-  
+  <div class="tool-group" id="imageEditTools" style="display:none;">
+    <button id="scaleUpBtn" class="secondary">🔍 +</button>
+    <button id="scaleDownBtn" class="secondary">🔍 -</button>
+    <button id="rotateBtn" class="secondary">🔄 Rotate</button>
+    <button id="flipHBtn" class="secondary">↔️ Flip H</button>
+    <button id="flipVBtn" class="secondary">↕️ Flip V</button>
+    <button id="deleteImageBtn" class="danger-btn">❌ Delete</button>
+  </div>
   <div class="tool-group">
-    <button id="recordBtn" style="background: #dc3545;">
-      <span id="recordIcon">🔴</span>
-      <span id="recordText">Record with Audio + Save to Telegram</span>
-    </button>
-    <button class="telegram-btn" onclick="testTelegram()">🤖 Test Telegram</button>
-  </div>
-  
-  <input type="file" id="pdfUpload" class="file-input" accept=".pdf">
-  <label for="pdfUpload" class="file-label">📄 Upload PDF</label>
-  
-  <div class="pdf-controls" id="pdfControls" style="display: none;">
-    <button id="prevPageBtn" class="secondary">◀ Prev</button>
-    <span id="pageInfo">Page 1/1</span>
-    <button id="nextPageBtn" class="secondary">Next ▶</button>
+    <button id="showQuizModalBtn" class="secondary">📋 Show Quiz</button>
+    <button id="recordBtn" class="danger-btn">🔴 Record + Telegram</button>
+    <button id="testTelegramBtn" class="telegram-btn">🤖 Test Bot</button>
   </div>
 </div>
 
-<!-- Math Input Section -->
-<div class="math-input-section">
-  <strong>📝 Math Equations:</strong>
-  <input type="text" id="mathInput" placeholder="Enter math in LaTeX: $x^2 + y^2 = r^2$">
-  <button onclick="addMathEquation()" style="padding: 5px 10px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px;">
-    Add Math to Canvas
-  </button>
-</div>
-
-<div id="pdfInfo" class="pdf-info" style="display: none;">
-  ✅ PDF loaded successfully! You can now draw on both canvases.
-</div>
-
-<div id="adjStatus" class="adj-status">
-  🔧 ADJ Mode Active: You can now zoom/pan only the top PDF with pinch gestures
-</div>
-
-<div id="syncStatus" class="sync-status">
-  🔄 SYNC Mode Active: Both views will sync automatically
-</div>
-
-<div id="loading" class="loading">
-  ⏳ Loading PDF page...
-</div>
-
-<h2>📌 PDF View (Reference + Drawing) <span id="topPdfStatus"></span></h2>
-<div class="boardBox">
-  <div class="pdf-container" id="topPdfContainer">
-    <canvas id="topPdf"></canvas>
-    <div id="topCanvasStatus" class="status-indicator">Ready</div>
+<div class="board-container">
+  <div class="board-card">
+    <div class="board-header">📄 TOP: Fixed View (PDF/MCQ/Images + Drawing)</div>
+    <div class="canvas-holder" id="topHolder">
+      <canvas id="topCanvas"></canvas>
+      <div class="status-badge" id="topStatus">Fixed View</div>
+    </div>
+  </div>
+  <div class="board-card">
+    <div class="board-header">✍️ BOTTOM: Zoomable Canvas (Pinch 0.2x–12x • Pan • Draw)</div>
+    <div class="canvas-holder" id="mainHolder">
+      <canvas id="mainCanvas"></canvas>
+      <div class="status-badge" id="mainStatus">Zoom + Draw</div>
+    </div>
   </div>
 </div>
 
-<h2>✍️ Drawing Canvas (Zoom + Pan + Draw) <span id="mainBoardStatus"></span></h2>
-<div class="boardBox">
-  <div class="canvas-container" id="mainCanvasContainer">
-    <canvas id="mainBoard"></canvas>
+<div id="quizModal" class="modal">
+  <div class="modal-content">
+    <h3>📚 MCQs from File</h3>
+    <div id="quizContent"></div>
+    <button onclick="closeModal('quizModal')" style="margin-top:15px;">Close</button>
   </div>
 </div>
-
-<div class="instructions">
-  <strong>Instructions:</strong> 
-  • Top: PDF Reference View + Drawing (Recording available)
-  • Bottom: Drawing Canvas (Zoom with pinch gesture • Pan with two fingers • Draw with one finger/mouse)
-  • Drawing will appear on both canvases simultaneously
-  • Use ADJ button to adjust top PDF • SYNC button to sync both views
-  • Smart Erase to remove complete strokes
-  • Click "Test Microphone" to enable audio recording
-  • Record button to record top canvas with audio and auto-save to Telegram
-  • Math equations can be added using LaTeX syntax
-</div>
-
-<!-- Include PDF.js library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 
 <script>
-// Set PDF.js worker path
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-
-// ============================================
-// TELEGRAM CONFIGURATION - UPDATED
-// ============================================
-const TELEGRAM_CONFIG = {
-  BOT_TOKEN: '8142735342:AAHexGW7ZVeWorAb70i51P1hudv9rljUH7Q',
-  CHAT_ID: '5229323108',
-  BOT_USERNAME: 'WB27_bot'
-};
-
-// ============================================
-// CORS PROXY CONFIGURATION - FIXED
-// ============================================
-const CORS_PROXIES = [
-  'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url=',
-  'https://cors-anywhere.herokuapp.com/',
-  'https://proxy.cors.sh/'
-];
-
-let currentProxyIndex = 0;
-
-function getProxyUrl(apiUrl) {
-  return CORS_PROXIES[currentProxyIndex] + encodeURIComponent(apiUrl);
-}
-
-function rotateProxy() {
-  currentProxyIndex = (currentProxyIndex + 1) % CORS_PROXIES.length;
-}
-
-// ============================================
-// MICROPHONE RECORDING SETUP - FIXED
-// ============================================
-let audioStream = null;
-let audioTrack = null;
-let isMicEnabled = false;
-
-// ============================================
-// SCREEN RECORDING SYSTEM - FIXED
-// ============================================
-const recordingCanvas = document.getElementById('recordingCanvas');
-const recordingCtx = recordingCanvas.getContext('2d');
-
-let recorder = null;
-let recordedChunks = [];
-let isRecording = false;
-let recordingInterval = null;
-let recordingStream = null;
-
-// ============================================
-// TELEGRAM FUNCTIONS - CORS FIXED
-// ============================================
-async function testTelegram() {
-  try {
-    document.getElementById('telegramStatusText').textContent = '🔄 Testing...';
-    
-    // Try with proxy first
-    const result = await callTelegramAPI('getMe');
-    
-    if (result.ok) {
-      document.getElementById('telegramStatusText').textContent = '✅ Connected to @' + result.result.username;
-      alert('✅ Telegram bot connection successful!\nBot: @' + result.result.username);
-      return true;
-    } else {
-      document.getElementById('telegramStatusText').textContent = '⚠️ Bot token invalid';
-      alert('⚠️ Bot token invalid. Please check your bot token.');
-      return false;
-    }
-  } catch (error) {
-    console.error('Telegram test error:', error);
-    document.getElementById('telegramStatusText').textContent = '✅ CORS bypassed';
-    
-    // Even if CORS fails, we can still upload via our method
-    alert('✅ Telegram connection tested.\n\nEven if CORS error appears, recording and upload will work through our proxy system!');
-    return true;
-  }
-}
-
-async function callTelegramAPI(method, formData = null) {
-  const apiUrl = `https://api.telegram.org/bot${TELEGRAM_CONFIG.BOT_TOKEN}/${method}`;
+  // ========== TELEGRAM CONFIG ==========
+  const TELEGRAM = { BOT_TOKEN: '8142735342:AAHexGW7ZVeWorAb70i51P1hudv9rljUH7Q', CHAT_ID: '5229323108', BOT_USERNAME: 'WB27_bot' };
   
-  for (let i = 0; i < CORS_PROXIES.length; i++) {
-    try {
-      const proxyUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(apiUrl);
-      
-      const options = {
-        method: formData ? 'POST' : 'GET',
-        headers: {}
-      };
-      
-      if (formData) {
-        // Don't set Content-Type for FormData, browser will set it automatically
-        options.body = formData;
-      }
-      
-      const response = await fetch(proxyUrl, options);
-      
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch (error) {
-      console.log(`Proxy ${CORS_PROXIES[currentProxyIndex]} failed, trying next...`);
-      rotateProxy();
-    }
+  // ========== GLOBALS ==========
+  const topCanvas = document.getElementById('topCanvas');
+  const mainCanvas = document.getElementById('mainCanvas');
+  let topCtx = topCanvas.getContext('2d');
+  let mainCtx = mainCanvas.getContext('2d');
+  
+  let pdfOffscreen = document.createElement('canvas');
+  let pdfOffCtx = pdfOffscreen.getContext('2d');
+  let drawingLayerMain = document.createElement('canvas');
+  let drawingLayerTop = document.createElement('canvas');
+  let mainDrawCtx = drawingLayerMain.getContext('2d');
+  let topDrawCtx = drawingLayerTop.getContext('2d');
+  
+  let currentStrokes = [];
+  let currentStrokePoints = [];
+  let historyStack = []; let historyIndex = -1;
+  
+  let currentTool = 'draw';
+  let penColor = '#000000';
+  let penSize = 3;
+  let scale = 1, offsetX = 0, offsetY = 0;
+  let hasContent = false;
+  let images = []; // { img, x, y, width, height, rotation, flipH, flipV }
+  let selectedImageIndex = -1;
+  
+  // Drawing events
+  let isDrawing = false, lastPoint = {x:0,y:0}, isTap = false;
+  let pinchDist = 0, pinchMid = {x:0,y:0};
+  
+  // Recording
+  let mediaRecorder = null, recordedChunks = [], isRecording = false;
+  let recordingInterval = null;
+  let micStream = null, isMicEnabled = false;
+  const hiddenRecordCanvas = document.createElement('canvas');
+  let hiddenRecordCtx = hiddenRecordCanvas.getContext('2d');
+  
+  // ========== UTILITIES ==========
+  function showToast(msg, isError=false) {
+    const toast = document.getElementById('micStatusToast');
+    toast.textContent = msg;
+    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 3000);
   }
   
-  // If all proxies fail, try direct with no-cors (send only)
-  try {
-    const response = await fetch(apiUrl, {
-      method: formData ? 'POST' : 'GET',
-      mode: 'no-cors',
-      body: formData
-    });
-    return { ok: true }; // We can't read response in no-cors mode
-  } catch (error) {
-    throw new Error('All connection methods failed');
+  function setCanvasSize(w, h) {
+    topCanvas.width = w; topCanvas.height = h;
+    mainCanvas.width = w; mainCanvas.height = h;
+    drawingLayerMain.width = w; drawingLayerMain.height = h;
+    drawingLayerTop.width = w; drawingLayerTop.height = h;
+    pdfOffscreen.width = w; pdfOffscreen.height = h;
+    hiddenRecordCanvas.width = w; hiddenRecordCanvas.height = h;
+    redrawAll();
   }
-}
-
-function showQRCode() {
-  const qrContainer = document.getElementById('qrCodeContainer');
-  qrContainer.innerHTML = '';
-  new QRCode(qrContainer, {
-    text: `https://t.me/${TELEGRAM_CONFIG.BOT_USERNAME}`,
-    width: 200,
-    height: 200,
-    colorDark: "#000000",
-    colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.H
-  });
-  document.getElementById('qrModal').style.display = 'flex';
-}
-
-function closeModal(modalId) {
-  document.getElementById(modalId).style.display = 'none';
-}
-
-// ============================================
-// MICROPHONE FUNCTIONS - WORKING
-// ============================================
-async function testMicrophone() {
-  try {
-    alert('🎤 Microphone test: Please allow microphone access in the next popup.');
+  
+  function redrawAll() {
+    // Bottom zoomable
+    mainCtx.setTransform(1,0,0,1,0,0);
+    mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height);
+    mainCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
+    if(pdfOffscreen.width) mainCtx.drawImage(pdfOffscreen,0,0);
+    mainCtx.drawImage(drawingLayerMain,0,0);
     
-    audioStream = await navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
-    });
+    // Top fixed
+    topCtx.setTransform(1,0,0,1,0,0);
+    topCtx.clearRect(0,0, topCanvas.width, topCanvas.height);
+    topCtx.drawImage(pdfOffscreen,0,0);
+    topCtx.drawImage(drawingLayerTop,0,0);
     
-    audioTrack = audioStream.getAudioTracks()[0];
-    
-    if (audioTrack) {
-      isMicEnabled = true;
-      alert('✅ Microphone test successful!\n\nDevice: ' + audioTrack.label);
-      
-      document.getElementById('enableMicBtn').innerHTML = '✅ Mic Enabled';
-      document.getElementById('enableMicBtn').style.background = '#4caf50';
-      
-      showMicStatus('🎤 Microphone Test Successful!');
-      
-      // Stop stream after test
-      setTimeout(() => {
-        audioStream.getTracks().forEach(track => track.stop());
-        audioStream = null;
-      }, 1000);
-    }
-    
-  } catch (error) {
-    console.error('Microphone test error:', error);
-    alert('❌ Microphone access failed:\n' + error.message + '\n\nPlease check browser permissions.');
+    document.getElementById('mainStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x`;
   }
-}
-
-async function enableMicrophoneForRecording() {
-  try {
-    if (isMicEnabled) {
-      // Disable mic
-      if (audioStream) {
-        audioStream.getTracks().forEach(track => track.stop());
-      }
-      isMicEnabled = false;
-      audioStream = null;
-      audioTrack = null;
-      
-      document.getElementById('enableMicBtn').innerHTML = '🔊 Enable Microphone';
-      document.getElementById('enableMicBtn').style.background = '#2196f3';
-      showMicStatus('🔇 Microphone Disabled');
-      return;
+  
+  function getCanvasCoords(e, canvasRef = mainCanvas) {
+    const rect = canvasRef.getBoundingClientRect();
+    const clientX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const clientY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const canvasW = canvasRef.width, canvasH = canvasRef.height;
+    const cssW = rect.width, cssH = rect.height;
+    let canvasX = (clientX / cssW) * canvasW;
+    let canvasY = (clientY / cssH) * canvasH;
+    if(canvasRef === mainCanvas) {
+      canvasX = (canvasX - offsetX) / scale;
+      canvasY = (canvasY - offsetY) / scale;
     }
-    
-    alert('🎤 Please allow microphone access in the next popup to enable audio recording.');
-    
-    audioStream = await navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 44100
-      }
-    });
-    
-    audioTrack = audioStream.getAudioTracks()[0];
-    
-    if (audioTrack) {
-      isMicEnabled = true;
-      document.getElementById('enableMicBtn').innerHTML = '✅ Mic Enabled';
-      document.getElementById('enableMicBtn').style.background = '#4caf50';
-      showMicStatus('🎤 Microphone Enabled for Recording');
-      alert('✅ Microphone enabled!\nAudio will be recorded with video.');
-    }
-    
-  } catch (error) {
-    console.error('Enable microphone error:', error);
-    alert('❌ Failed to enable microphone: ' + error.message);
+    return { x: Math.max(0, Math.min(canvasX, canvasW)), y: Math.max(0, Math.min(canvasY, canvasH)) };
   }
-}
-
-function showMicStatus(message) {
-  const indicator = document.getElementById('micStatusIndicator');
-  indicator.textContent = message;
-  indicator.style.display = 'block';
-  setTimeout(() => {
-    indicator.style.display = 'none';
-  }, 5000);
-}
-
-// ============================================
-// VIDEO RECORDING WITH AUDIO - FIXED
-// ============================================
-async function startRecording() {
-  try {
-    if (isRecording) {
-      stopRecording();
-      return;
-    }
-    
-    // Show recording indicator
-    document.getElementById('recordingIndicator').style.display = 'block';
-    document.getElementById('recordIcon').textContent = "⏹️";
-    document.getElementById('recordText').textContent = "Stop Recording";
-    document.getElementById('recordBtn').style.background = "#28a745";
-    document.getElementById('topCanvasStatus').textContent = "🎥 Starting recording...";
-    
-    // Clear previous recording
-    recordedChunks = [];
-    
-    // Get audio stream if microphone is enabled
-    let audioStreamForRecording = null;
-    if (isMicEnabled && audioStream) {
-      try {
-        // Re-request microphone for recording
-        audioStreamForRecording = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
-      } catch (audioError) {
-        console.warn('Audio stream error:', audioError);
-        isMicEnabled = false;
-      }
-    }
-    
-    // Set up recording canvas
-    recordingCanvas.width = topPdf.width || 1280;
-    recordingCanvas.height = topPdf.height || 720;
-    
-    // Create canvas stream
-    const canvasStream = recordingCanvas.captureStream(15);
-    
-    // Combine streams if audio is available
-    if (audioStreamForRecording) {
-      recordingStream = new MediaStream([
-        ...canvasStream.getVideoTracks(),
-        ...audioStreamForRecording.getAudioTracks()
-      ]);
-    } else {
-      recordingStream = canvasStream;
-    }
-    
-    // Choose mime type
-    const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9,opus') 
-      ? 'video/webm; codecs=vp9,opus'
-      : MediaRecorder.isTypeSupported('video/webm')
-      ? 'video/webm'
-      : MediaRecorder.isTypeSupported('video/mp4')
-      ? 'video/mp4'
-      : 'video/webm';
-    
-    // Recorder options
-    const options = {
-      mimeType: mimeType,
-      videoBitsPerSecond: 1000000
+  
+  function saveHistory() {
+    const state = {
+      mainImg: drawingLayerMain.toDataURL(),
+      topImg: drawingLayerTop.toDataURL(),
+      strokes: JSON.parse(JSON.stringify(currentStrokes))
     };
-    
-    if (audioStreamForRecording) {
-      options.audioBitsPerSecond = 128000;
-    }
-    
-    // Create recorder
-    recorder = new MediaRecorder(recordingStream, options);
-    
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data);
+    if(historyIndex < historyStack.length-1) historyStack = historyStack.slice(0, historyIndex+1);
+    historyStack.push(state);
+    historyIndex = historyStack.length-1;
+    if(historyStack.length > 50) { historyStack.shift(); historyIndex--; }
+    updateUndoRedo();
+  }
+  
+  function restoreFromHistory(state) {
+    const mainImg = new Image(); mainImg.onload = () => { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); mainDrawCtx.drawImage(mainImg,0,0); redrawAll(); };
+    mainImg.src = state.mainImg;
+    const topImg = new Image(); topImg.onload = () => { topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); topDrawCtx.drawImage(topImg,0,0); redrawAll(); };
+    topImg.src = state.topImg;
+    currentStrokes = state.strokes || [];
+  }
+  
+  function undo() { if(historyIndex>0) { historyIndex--; restoreFromHistory(historyStack[historyIndex]); } updateUndoRedo(); }
+  function redo() { if(historyIndex<historyStack.length-1) { historyIndex++; restoreFromHistory(historyStack[historyIndex]); } updateUndoRedo(); }
+  function updateUndoRedo() { document.getElementById('undoBtn').disabled = historyIndex<=0; document.getElementById('redoBtn').disabled = historyIndex>=historyStack.length-1; }
+  
+  function drawStroke(from, to, isDot=false) {
+    if(currentTool === 'draw') {
+      mainDrawCtx.strokeStyle = penColor; mainDrawCtx.lineWidth = penSize; mainDrawCtx.lineCap='round';
+      topDrawCtx.strokeStyle = penColor; topDrawCtx.lineWidth = penSize; topDrawCtx.lineCap='round';
+      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x,from.y); mainDrawCtx.lineTo(to.x,to.y); mainDrawCtx.stroke();
+      topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x,from.y); topDrawCtx.lineTo(to.x,to.y); topDrawCtx.stroke();
+      if(isDot) {
+        mainDrawCtx.fillStyle = penColor; topDrawCtx.fillStyle = penColor;
+        mainDrawCtx.beginPath(); mainDrawCtx.arc(to.x,to.y,penSize/2,0,Math.PI*2); mainDrawCtx.fill();
+        topDrawCtx.beginPath(); topDrawCtx.arc(to.x,to.y,penSize/2,0,Math.PI*2); topDrawCtx.fill();
       }
-    };
-    
-    recorder.onstop = async () => {
-      if (recordedChunks.length > 0) {
-        const blob = new Blob(recordedChunks, { type: mimeType });
-        await saveRecordingToTelegram(blob, audioStreamForRecording ? 'with audio' : 'without audio');
-      }
-      
-      // Clean up
-      if (recordingStream) {
-        recordingStream.getTracks().forEach(track => track.stop());
-        recordingStream = null;
-      }
-      if (audioStreamForRecording) {
-        audioStreamForRecording.getTracks().forEach(track => track.stop());
-      }
-    };
-    
-    // Start recording
-    recorder.start(100);
-    isRecording = true;
-    
-    // Start capturing frames
-    recordingInterval = setInterval(captureCanvasFrame, 1000 / 15);
-    
-    alert('🎥 Recording started ' + (audioStreamForRecording ? 'WITH audio' : 'WITHOUT audio') + '!\n\nDraw on the canvas and speak if microphone is enabled.\nClick STOP button when finished.');
-    
-  } catch (error) {
-    console.error('Recording error:', error);
-    alert('❌ Recording failed: ' + error.message + '\n\nTrying screenshot instead...');
-    saveScreenshotToTelegram();
-  }
-}
-
-function captureCanvasFrame() {
-  try {
-    if (!recordingCtx || !topPdf) return;
-    
-    // Clear and draw current canvas content
-    recordingCtx.fillStyle = 'white';
-    recordingCtx.fillRect(0, 0, recordingCanvas.width, recordingCanvas.height);
-    recordingCtx.drawImage(topPdf, 0, 0, recordingCanvas.width, recordingCanvas.height);
-    
-  } catch (error) {
-    console.error('Frame capture error:', error);
-  }
-}
-
-function stopRecording() {
-  if (recordingInterval) {
-    clearInterval(recordingInterval);
-    recordingInterval = null;
-  }
-  
-  if (recorder && recorder.state === 'recording') {
-    recorder.stop();
-  }
-  
-  isRecording = false;
-  
-  document.getElementById('recordingIndicator').style.display = 'none';
-  document.getElementById('recordIcon').textContent = "🔴";
-  document.getElementById('recordText').textContent = "Record with Audio + Save to Telegram";
-  document.getElementById('recordBtn').style.background = "#dc3545";
-  document.getElementById('topCanvasStatus').textContent = "Processing recording...";
-}
-
-async function saveRecordingToTelegram(blob, audioType = 'with audio') {
-  try {
-    const extension = blob.type.includes('mp4') ? 'mp4' : 'webm';
-    const fileName = `whiteboard_${Date.now()}_${audioType}.${extension}`;
-    
-    // Always save locally first
-    const localUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = localUrl;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(localUrl), 1000);
-    
-    // Upload to Telegram via proxy
-    document.getElementById('topCanvasStatus').textContent = '📤 Uploading to Telegram...';
-    
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CONFIG.CHAT_ID);
-    
-    if (extension === 'mp4' || extension === 'webm') {
-      formData.append('video', blob, fileName);
-    } else {
-      formData.append('document', blob, fileName);
-    }
-    
-    formData.append('caption', `Whiteboard Recording (${audioType}) - ${new Date().toLocaleString()}`);
-    
-    const endpoint = (extension === 'mp4' || extension === 'webm') ? 'sendVideo' : 'sendDocument';
-    
-    // Try Telegram upload with multiple retries
-    const telegramSuccess = await uploadToTelegramWithRetry(formData, endpoint);
-    
-    if (telegramSuccess) {
-      document.getElementById('topCanvasStatus').textContent = '✅ Video saved to Telegram!';
-      setTimeout(() => {
-        showQRCode();
-        alert(`✅ Success!\n\nVideo saved locally: ${fileName}\nAlso uploaded to Telegram bot: @${TELEGRAM_CONFIG.BOT_USERNAME}`);
-      }, 1000);
-    } else {
-      document.getElementById('topCanvasStatus').textContent = '✅ Video saved locally';
-      setTimeout(() => {
-        alert(`✅ Video saved locally: ${fileName}\n\n⚠️ Telegram upload failed due to CORS restrictions.\nYou can manually send the file to @${TELEGRAM_CONFIG.BOT_USERNAME}`);
-        showQRCode();
-      }, 1000);
-    }
-    
-  } catch (error) {
-    console.error('Save recording error:', error);
-    document.getElementById('topCanvasStatus').textContent = '✅ Video saved locally only';
-    alert('✅ Video saved locally.\nTelegram upload failed: ' + error.message);
-  }
-}
-
-async function uploadToTelegramWithRetry(formData, endpoint, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const result = await callTelegramAPI(endpoint, formData);
-      if (result && result.ok) {
-        return true;
-      }
-    } catch (error) {
-      console.log(`Upload attempt ${i + 1} failed:`, error);
-      if (i < retries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-      }
-    }
-  }
-  
-  // If all retries fail, try the fallback method
-  return await uploadToTelegramFallback(formData, endpoint);
-}
-
-async function uploadToTelegramFallback(formData, endpoint) {
-  try {
-    // Try with iframe method (bypasses CORS completely)
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `https://api.telegram.org/bot${TELEGRAM_CONFIG.BOT_TOKEN}/${endpoint}`;
-    form.enctype = 'multipart/form-data';
-    
-    // Create hidden fields for FormData
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.name = key;
-        // Can't set file value programmatically for security
-        continue;
-      }
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    }
-    
-    iframe.contentDocument.body.appendChild(form);
-    form.submit();
-    
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 5000);
-    
-    // Assume it worked since we can't read response
-    return true;
-    
-  } catch (error) {
-    console.error('Fallback upload error:', error);
-    return false;
-  }
-}
-
-async function saveScreenshotToTelegram() {
-  try {
-    const dataUrl = topPdf.toDataURL('image/png');
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-    const fileName = `screenshot_${Date.now()}.png`;
-    
-    // Save locally
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    // Try Telegram upload
-    const formData = new FormData();
-    formData.append('chat_id', TELEGRAM_CONFIG.CHAT_ID);
-    formData.append('document', blob, fileName);
-    formData.append('caption', `Whiteboard Screenshot - ${new Date().toLocaleString()}`);
-    
-    await callTelegramAPI('sendDocument', formData);
-    
-    document.getElementById('topCanvasStatus').textContent = '✅ Screenshot saved!';
-    setTimeout(showQRCode, 1000);
-    
-  } catch (error) {
-    console.error('Screenshot error:', error);
-    document.getElementById('topCanvasStatus').textContent = '✅ Screenshot saved locally';
-  }
-}
-
-function toggleRecording() {
-  startRecording();
-}
-
-// ============================================
-// MATH EQUATIONS FUNCTION
-// ============================================
-function addMathEquation() {
-  const mathInput = document.getElementById('mathInput');
-  const mathText = mathInput.value.trim();
-  
-  if (!mathText) {
-    alert('Please enter a math equation');
-    return;
-  }
-  
-  // Save state before adding math
-  saveState();
-  
-  // Draw on both canvases
-  const ctx1 = topPdf.getContext('2d');
-  const ctx2 = mainCanvas.getContext('2d');
-  
-  ctx1.font = '20px Arial';
-  ctx1.fillStyle = '#000000';
-  ctx1.fillText(mathText, 50, 50);
-  
-  ctx2.font = '20px Arial';
-  ctx2.fillStyle = '#000000';
-  ctx2.fillText(mathText, 50, 50);
-  
-  topCanvasStatus.textContent = 'Math equation added';
-  mathInput.value = '';
-}
-
-// ============================================
-// ORIGINAL WHITEBOARD CODE (UNCHANGED - WORKING)
-// ============================================
-// [All the original whiteboard code remains exactly the same]
-// DOM references
-const topPdf = document.getElementById('topPdf');
-const mainCanvas = document.getElementById('mainBoard');
-const topPdfContainer = document.getElementById('topPdfContainer');
-const mainCanvasContainer = document.getElementById('mainCanvasContainer');
-const topPdfCtx = topPdf.getContext('2d');
-const mainCtx = mainCanvas.getContext('2d');
-const pdfInfo = document.getElementById('pdfInfo');
-const adjStatus = document.getElementById('adjStatus');
-const syncStatus = document.getElementById('syncStatus');
-const loading = document.getElementById('loading');
-const topPdfStatus = document.getElementById('topPdfStatus');
-const mainBoardStatus = document.getElementById('mainBoardStatus');
-const topCanvasStatus = document.getElementById('topCanvasStatus');
-
-// Tool buttons
-const drawBtn = document.getElementById('drawBtn');
-const eraseBtn = document.getElementById('eraseBtn');
-const smartEraseBtn = document.getElementById('smartEraseBtn');
-const clearBtn = document.getElementById('clearBtn');
-const adjBtn = document.getElementById('adjBtn');
-const syncBtn = document.getElementById('syncBtn');
-const resetAdjBtn = document.getElementById('resetAdjBtn');
-const undoBtn = document.getElementById('undoBtn');
-const redoBtn = document.getElementById('redoBtn');
-const pdfUpload = document.getElementById('pdfUpload');
-const brushSize = document.getElementById('brushSize');
-const brushSizeValue = document.getElementById('brushSizeValue');
-const customColor = document.getElementById('color');
-const pdfControls = document.getElementById('pdfControls');
-const prevPageBtn = document.getElementById('prevPageBtn');
-const nextPageBtn = document.getElementById('nextPageBtn');
-const pageInfo = document.getElementById('pageInfo');
-
-// Recording elements
-const recordBtn = document.getElementById('recordBtn');
-const recordIcon = document.getElementById('recordIcon');
-const recordText = document.getElementById('recordText');
-
-// Dynamic sizes based on PDF ratio
-let CANVAS_WIDTH = 1200;
-let CANVAS_HEIGHT = 800;
-let PDF_RATIO = 16/9;
-
-// MAIN BUFFER CANVAS
-let buffer = document.createElement('canvas');
-let buf = buffer.getContext('2d');
-
-// PDF background canvas (for both canvases)
-let pdfBackground = document.createElement('canvas');
-let pdfCtx = pdfBackground.getContext('2d');
-
-// Drawing buffers for both canvases
-let drawingBuffers = {};
-let topDrawingBuffers = {};
-let currentDrawingBuffer = null;
-let currentTopDrawingBuffer = null;
-let drawingCtx = null;
-let topDrawingCtx = null;
-
-// Border canvas
-let borderCanvas = document.createElement('canvas');
-let borderCtx = borderCanvas.getContext('2d');
-
-// State
-let scale = 1;
-let offsetX = 0, offsetY = 0;
-let topScale = 1;
-let topOffsetX = 0, topOffsetY = 0;
-let drawing = false;
-let last = {x:0,y:0};
-let lastDist = 0;
-let lastMidpoint = {x: 0, y: 0};
-let isTap = false;
-let currentTool = 'draw';
-let currentColor = '#000000';
-let currentBrushSize = 3;
-let hasPDF = false;
-let adjMode = false;
-let syncMode = false;
-let isRendering = false;
-
-// PDF Zoom State
-let pdfZoom = 1.0;
-let pdfBaseWidth = 0;
-let pdfBaseHeight = 0;
-
-// Store strokes for smart erase
-let currentStroke = [];
-let allStrokes = [];
-
-// Smart erase tracking
-let smartEraseActive = false;
-let smartEraseLastPos = null;
-
-// PDF state
-let pdfDoc = null;
-let currentPage = 1;
-let totalPages = 0;
-
-// Store ADJ positions for each page
-const pageAdjPositions = {};
-
-// Drawing history for undo/redo
-let pageHistories = {};
-let currentHistory = [];
-let historyIndex = -1;
-
-// PDF dimensions
-let pdfPageWidth = 0;
-let pdfPageHeight = 0;
-
-// Update container ratios based on PDF dimensions
-function updateContainerRatios(pdfWidth, pdfHeight) {
-  PDF_RATIO = pdfWidth / pdfHeight;
-  
-  const aspectRatioPercent = (1 / PDF_RATIO) * 100;
-  
-  topPdfContainer.style.paddingBottom = `${aspectRatioPercent}%`;
-  mainCanvasContainer.style.paddingBottom = `${aspectRatioPercent}%`;
-  
-  pdfPageWidth = pdfWidth;
-  pdfPageHeight = pdfHeight;
-}
-
-// Initialize all canvases with dynamic size
-function initializeCanvases(width, height) {
-  CANVAS_WIDTH = width;
-  CANVAS_HEIGHT = height;
-  
-  buffer.width = CANVAS_WIDTH;
-  buffer.height = CANVAS_HEIGHT;
-  
-  pdfBackground.width = CANVAS_WIDTH;
-  pdfBackground.height = CANVAS_HEIGHT;
-  
-  borderCanvas.width = CANVAS_WIDTH;
-  borderCanvas.height = CANVAS_HEIGHT;
-  
-  Object.keys(drawingBuffers).forEach(pageNum => {
-    if (drawingBuffers[pageNum]) {
-      drawingBuffers[pageNum].width = CANVAS_WIDTH;
-      drawingBuffers[pageNum].height = CANVAS_HEIGHT;
-    }
-    if (topDrawingBuffers[pageNum]) {
-      topDrawingBuffers[pageNum].width = CANVAS_WIDTH;
-      topDrawingBuffers[pageNum].height = CANVAS_HEIGHT;
-    }
-  });
-  
-  if (currentDrawingBuffer) {
-    currentDrawingBuffer.width = CANVAS_WIDTH;
-    currentDrawingBuffer.height = CANVAS_HEIGHT;
-  }
-  if (currentTopDrawingBuffer) {
-    currentTopDrawingBuffer.width = CANVAS_WIDTH;
-    currentTopDrawingBuffer.height = CANVAS_HEIGHT;
-  }
-  
-  drawPermanentBorder();
-}
-
-// Initialize top PDF canvas
-function initializeTopPdf(width, height) {
-  topPdf.width = width;
-  topPdf.height = height;
-}
-
-// Initialize drawing buffers for current page
-function initializeDrawingBuffersForPage(pageNum) {
-  if (!drawingBuffers[pageNum]) {
-    drawingBuffers[pageNum] = document.createElement('canvas');
-    drawingBuffers[pageNum].width = CANVAS_WIDTH;
-    drawingBuffers[pageNum].height = CANVAS_HEIGHT;
-  }
-  
-  if (!topDrawingBuffers[pageNum]) {
-    topDrawingBuffers[pageNum] = document.createElement('canvas');
-    topDrawingBuffers[pageNum].width = CANVAS_WIDTH;
-    topDrawingBuffers[pageNum].height = CANVAS_HEIGHT;
-  }
-  
-  currentDrawingBuffer = drawingBuffers[pageNum];
-  currentTopDrawingBuffer = topDrawingBuffers[pageNum];
-  drawingCtx = currentDrawingBuffer.getContext('2d');
-  topDrawingCtx = currentTopDrawingBuffer.getContext('2d');
-  
-  if (!pageHistories[pageNum]) {
-    pageHistories[pageNum] = [];
-    allStrokes = [];
-  }
-  
-  currentHistory = pageHistories[pageNum];
-  historyIndex = currentHistory.length - 1;
-  
-  updateUndoRedoButtons();
-}
-
-// Draw permanent border
-function drawPermanentBorder() {
-  borderCtx.strokeStyle = '#e0e0e0';
-  borderCtx.lineWidth = 2;
-  borderCtx.strokeRect(50, 50, borderCanvas.width - 100, borderCanvas.height - 100);
-}
-
-// Initialize with default size
-initializeCanvases(1200, 800);
-
-// Fixed Clear Canvas function
-function clearCanvas() {
-  if (!currentDrawingBuffer || !currentTopDrawingBuffer) return;
-  
-  saveState();
-  
-  drawingCtx.clearRect(0, 0, currentDrawingBuffer.width, currentDrawingBuffer.height);
-  topDrawingCtx.clearRect(0, 0, currentTopDrawingBuffer.width, currentTopDrawingBuffer.height);
-  
-  allStrokes = [];
-  
-  redrawMain();
-  redrawTop();
-}
-
-// Smart Erase - Find and remove complete stroke
-function smartErase(x, y, isSwiping = false) {
-  if (!currentDrawingBuffer || allStrokes.length === 0) return false;
-  
-  const tolerance = currentBrushSize * 2;
-  let erasedSomething = false;
-  
-  for (let i = allStrokes.length - 1; i >= 0; i--) {
-    const stroke = allStrokes[i];
-    let isClose = false;
-    
-    if (stroke.isDot) {
-      const point = stroke.points[0];
-      const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
-      if (distance < tolerance) {
-        isClose = true;
-      }
-    } else {
-      for (let j = 0; j < stroke.points.length; j++) {
-        const point = stroke.points[j];
-        const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
-        
-        if (distance < tolerance) {
-          isClose = true;
-          break;
+    } else if(currentTool === 'eraser') {
+      mainDrawCtx.globalCompositeOperation = 'destination-out'; topDrawCtx.globalCompositeOperation = 'destination-out';
+      mainDrawCtx.lineWidth = penSize*2; topDrawCtx.lineWidth = penSize*2;
+      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x,from.y); mainDrawCtx.lineTo(to.x,to.y); mainDrawCtx.stroke();
+      topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x,from.y); topDrawCtx.lineTo(to.x,to.y); topDrawCtx.stroke();
+      mainDrawCtx.globalCompositeOperation = 'source-over'; topDrawCtx.globalCompositeOperation = 'source-over';
+    } else if(currentTool === 'smartErase') {
+      const tolerance = penSize * 2.5;
+      let removed = false;
+      currentStrokes = currentStrokes.filter(stroke => {
+        for(let p of stroke.points) {
+          if(Math.hypot(p.x - to.x, p.y - to.y) < tolerance) { removed = true; return false; }
         }
-      }
-    }
-    
-    if (isClose) {
-      allStrokes.splice(i, 1);
-      erasedSomething = true;
-      
-      if (!isSwiping) {
-        break;
-      }
-    }
-  }
-  
-  if (erasedSomething) {
-    saveState();
-    redrawAllStrokes();
-  }
-  
-  return erasedSomething;
-}
-
-// Redraw all strokes (used after smart erase)
-function redrawAllStrokes() {
-  if (!currentDrawingBuffer || !currentTopDrawingBuffer) return;
-  
-  drawingCtx.clearRect(0, 0, currentDrawingBuffer.width, currentDrawingBuffer.height);
-  topDrawingCtx.clearRect(0, 0, currentTopDrawingBuffer.width, currentTopDrawingBuffer.height);
-  
-  allStrokes.forEach(stroke => {
-    drawingCtx.strokeStyle = stroke.color;
-    drawingCtx.lineWidth = stroke.width;
-    drawingCtx.lineCap = 'round';
-    drawingCtx.lineJoin = 'round';
-    
-    topDrawingCtx.strokeStyle = stroke.color;
-    topDrawingCtx.lineWidth = stroke.width;
-    topDrawingCtx.lineCap = 'round';
-    topDrawingCtx.lineJoin = 'round';
-    
-    if (stroke.isDot) {
-      drawingCtx.fillStyle = stroke.color;
-      drawingCtx.beginPath();
-      drawingCtx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width/2, 0, Math.PI * 2);
-      drawingCtx.fill();
-      
-      topDrawingCtx.fillStyle = stroke.color;
-      topDrawingCtx.beginPath();
-      topDrawingCtx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width/2, 0, Math.PI * 2);
-      topDrawingCtx.fill();
-    } else {
-      drawingCtx.beginPath();
-      drawingCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      
-      for (let i = 1; i < stroke.points.length; i++) {
-        const midX = (stroke.points[i-1].x + stroke.points[i].x) / 2;
-        const midY = (stroke.points[i-1].y + stroke.points[i].y) / 2;
-        drawingCtx.quadraticCurveTo(stroke.points[i-1].x, stroke.points[i-1].y, midX, midY);
-        drawingCtx.quadraticCurveTo(midX, midY, stroke.points[i].x, stroke.points[i].y);
-      }
-      drawingCtx.stroke();
-      
-      topDrawingCtx.beginPath();
-      topDrawingCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      
-      for (let i = 1; i < stroke.points.length; i++) {
-        const midX = (stroke.points[i-1].x + stroke.points[i].x) / 2;
-        const midY = (stroke.points[i-1].y + stroke.points[i].y) / 2;
-        topDrawingCtx.quadraticCurveTo(stroke.points[i-1].x, stroke.points[i-1].y, midX, midY);
-        topDrawingCtx.quadraticCurveTo(midX, midY, stroke.points[i].x, stroke.points[i].y);
-      }
-      topDrawingCtx.stroke();
-    }
-  });
-  
-  redrawMain();
-  redrawTop();
-}
-
-// Sync both views - Main function
-function syncViews() {
-  if (syncMode) {
-    scale = topScale;
-    offsetX = topOffsetX;
-    offsetY = topOffsetY;
-    
-    redrawMain();
-    redrawTop();
-  }
-}
-
-// Save current ADJ position for current page
-function saveAdjPosition() {
-  if (hasPDF && currentPage) {
-    pageAdjPositions[currentPage] = {
-      scale: topScale,
-      offsetX: topOffsetX,
-      offsetY: topOffsetY
-    };
-  }
-}
-
-// Load ADJ position for current page
-function loadAdjPosition() {
-  if (hasPDF && currentPage && pageAdjPositions[currentPage]) {
-    const savedPos = pageAdjPositions[currentPage];
-    topScale = savedPos.scale;
-    topOffsetX = savedPos.offsetX;
-    topOffsetY = savedPos.offsetY;
-    
-    if (syncMode) {
-      scale = topScale;
-      offsetX = topOffsetX;
-      offsetY = topOffsetY;
-    }
-  } else {
-    topScale = 1;
-    topOffsetX = 0;
-    topOffsetY = 0;
-    
-    if (syncMode) {
-      scale = 1;
-      offsetX = 0;
-      offsetY = 0;
-    }
-  }
-}
-
-// Reset ADJ position for current page
-function resetAdjPosition() {
-  topScale = 1;
-  topOffsetX = 0;
-  topOffsetY = 0;
-  
-  if (syncMode) {
-    scale = 1;
-    offsetX = 0;
-    offsetY = 0;
-  }
-  
-  if (pageAdjPositions[currentPage]) {
-    delete pageAdjPositions[currentPage];
-  }
-  
-  redrawMain();
-  redrawTop();
-}
-
-// Save current state to history
-function saveState() {
-  if (!currentDrawingBuffer) return;
-  
-  if (historyIndex < currentHistory.length - 1) {
-    currentHistory.splice(historyIndex + 1);
-  }
-  
-  const state = {
-    main: currentDrawingBuffer.toDataURL(),
-    top: currentTopDrawingBuffer.toDataURL(),
-    strokes: JSON.parse(JSON.stringify(allStrokes))
-  };
-  
-  currentHistory.push(state);
-  historyIndex = currentHistory.length - 1;
-  
-  if (currentHistory.length > 50) {
-    currentHistory.shift();
-    historyIndex--;
-  }
-  
-  updateUndoRedoButtons();
-}
-
-// Update undo/redo button states
-function updateUndoRedoButtons() {
-  undoBtn.disabled = historyIndex <= 0;
-  redoBtn.disabled = historyIndex >= currentHistory.length - 1;
-}
-
-// Undo action
-function undo() {
-  if (historyIndex > 0 && currentDrawingBuffer && currentTopDrawingBuffer) {
-    historyIndex--;
-    const state = currentHistory[historyIndex];
-    
-    const mainImg = new Image();
-    mainImg.onload = function() {
-      drawingCtx.clearRect(0, 0, currentDrawingBuffer.width, currentDrawingBuffer.height);
-      drawingCtx.drawImage(mainImg, 0, 0);
-      
-      allStrokes = state.strokes || [];
-      
-      redrawMain();
-    };
-    mainImg.src = state.main;
-    
-    const topImg = new Image();
-    topImg.onload = function() {
-      topDrawingCtx.clearRect(0, 0, currentTopDrawingBuffer.width, currentTopDrawingBuffer.height);
-      topDrawingCtx.drawImage(topImg, 0, 0);
-      redrawTop();
-    };
-    topImg.src = state.top;
-    
-    updateUndoRedoButtons();
-  }
-}
-
-// Redo action
-function redo() {
-  if (historyIndex < currentHistory.length - 1 && currentDrawingBuffer && currentTopDrawingBuffer) {
-    historyIndex++;
-    const state = currentHistory[historyIndex];
-    
-    const mainImg = new Image();
-    mainImg.onload = function() {
-      drawingCtx.clearRect(0, 0, currentDrawingBuffer.width, currentDrawingBuffer.height);
-      drawingCtx.drawImage(mainImg, 0, 0);
-      
-      allStrokes = state.strokes || [];
-      
-      redrawMain();
-    };
-    mainImg.src = state.main;
-    
-    const topImg = new Image();
-    topImg.onload = function() {
-      topDrawingCtx.clearRect(0, 0, currentTopDrawingBuffer.width, currentTopDrawingBuffer.height);
-      topDrawingCtx.drawImage(topImg, 0, 0);
-      redrawTop();
-    };
-    topImg.src = state.top;
-    
-    updateUndoRedoButtons();
-  }
-}
-
-// resize handling
-function resize(){
-  const topContainer = topPdf.parentElement;
-  const mainContainer = mainCanvas.parentElement;
-  
-  topPdf.width = topContainer.clientWidth;
-  topPdf.height = topContainer.clientHeight;
-  mainCanvas.width = mainContainer.clientWidth;
-  mainCanvas.height = mainContainer.clientHeight;
-
-  mainCtx.setTransform(1,0,0,1,0,0);
-
-  redrawTop();
-  redrawMain();
-}
-
-// Initialize and set up resize handling
-window.addEventListener('resize', resize);
-resize();
-
-// Optimized redraw functions
-function redrawMain(){
-  if (isRendering) return;
-  
-  mainCtx.setTransform(1,0,0,1,0,0);
-  mainCtx.clearRect(0,0,mainCanvas.width,mainCanvas.height);
-
-  mainCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
-
-  if (hasPDF) {
-    mainCtx.drawImage(pdfBackground, 0, 0);
-  }
-  
-  if (currentDrawingBuffer) {
-    mainCtx.drawImage(currentDrawingBuffer, 0, 0);
-  }
-  
-  mainCtx.drawImage(borderCanvas, 0, 0);
-}
-
-function redrawTop(){
-  if (isRendering) return;
-  
-  topPdfCtx.setTransform(1,0,0,1,0,0);
-  topPdfCtx.clearRect(0,0,topPdf.width,topPdf.height);
-
-  if (adjMode) {
-    topPdfCtx.setTransform(topScale,0,0,topScale,topOffsetX,topOffsetY);
-  } else {
-    topPdfCtx.setTransform(1,0,0,1,0,0);
-  }
-  
-  if (hasPDF) {
-    topPdfCtx.drawImage(pdfBackground, 0, 0, pdfBackground.width, pdfBackground.height,
-                       0, 0, topPdf.width, topPdf.height);
-  }
-  
-  if (currentTopDrawingBuffer) {
-    topPdfCtx.drawImage(currentTopDrawingBuffer, 0, 0);
-  }
-}
-
-// coordinate mapping from event to logical buffer coordinates
-function getPosFromEvent(e, canvas = mainCanvas){
-  const rect = canvas.getBoundingClientRect();
-  const t = e.touches ? e.touches[0] : e;
-  const clientX = t.clientX - rect.left;
-  const clientY = t.clientY - rect.top;
-  
-  const x = (clientX - offsetX) / scale;
-  const y = (clientY - offsetY) / scale;
-  return { x, y };
-}
-
-// Get midpoint between two touches for specific canvas
-function getTouchMidpoint(t1, t2, canvas = mainCanvas) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: ((t1.clientX + t2.clientX) / 2) - rect.left,
-    y: ((t1.clientY + t2.clientY) / 2) - rect.top
-  };
-}
-
-// Smart Eraser function - erases from both drawing buffers
-function eraseArea(fromX, fromY, toX, toY) {
-  if (!drawingCtx || !topDrawingCtx) return;
-  
-  drawingCtx.globalCompositeOperation = 'destination-out';
-  drawingCtx.lineWidth = currentBrushSize * 2;
-  drawingCtx.lineCap = 'round';
-  drawingCtx.lineJoin = 'round';
-  drawingCtx.beginPath();
-  drawingCtx.moveTo(fromX, fromY);
-  const midX = (fromX + toX) / 2;
-  const midY = (fromY + toY) / 2;
-  drawingCtx.quadraticCurveTo(fromX, fromY, midX, midY);
-  drawingCtx.quadraticCurveTo(midX, midY, toX, toY);
-  drawingCtx.stroke();
-  drawingCtx.globalCompositeOperation = 'source-over';
-  
-  topDrawingCtx.globalCompositeOperation = 'destination-out';
-  topDrawingCtx.lineWidth = currentBrushSize * 2;
-  topDrawingCtx.lineCap = 'round';
-  topDrawingCtx.lineJoin = 'round';
-  topDrawingCtx.beginPath();
-  topDrawingCtx.moveTo(fromX, fromY);
-  topDrawingCtx.quadraticCurveTo(fromX, fromY, midX, midY);
-  topDrawingCtx.quadraticCurveTo(midX, midY, toX, toY);
-  topDrawingCtx.stroke();
-  topDrawingCtx.globalCompositeOperation = 'source-over';
-}
-
-// Smooth drawing function with stroke tracking - draws on both canvases
-function drawSmoothLine(fromX, fromY, toX, toY) {
-  if (!drawingCtx || !topDrawingCtx) return;
-  
-  if (currentTool === 'draw') {
-    drawingCtx.strokeStyle = currentColor;
-    drawingCtx.lineWidth = currentBrushSize;
-    drawingCtx.lineCap = 'round';
-    drawingCtx.lineJoin = 'round';
-    drawingCtx.beginPath();
-    drawingCtx.moveTo(fromX, fromY);
-    const midX = (fromX + toX) / 2;
-    const midY = (fromY + toY) / 2;
-    drawingCtx.quadraticCurveTo(fromX, fromY, midX, midY);
-    drawingCtx.quadraticCurveTo(midX, midY, toX, toY);
-    drawingCtx.stroke();
-    
-    topDrawingCtx.strokeStyle = currentColor;
-    topDrawingCtx.lineWidth = currentBrushSize;
-    topDrawingCtx.lineCap = 'round';
-    topDrawingCtx.lineJoin = 'round';
-    topDrawingCtx.beginPath();
-    topDrawingCtx.moveTo(fromX, fromY);
-    topDrawingCtx.quadraticCurveTo(fromX, fromY, midX, midY);
-    topDrawingCtx.quadraticCurveTo(midX, midY, toX, toY);
-    topDrawingCtx.stroke();
-    
-    if (currentStroke.length === 0) {
-      currentStroke.push({x: fromX, y: fromY});
-    }
-    currentStroke.push({x: toX, y: toY});
-    
-  } else if (currentTool === 'erase') {
-    eraseArea(fromX, fromY, toX, toY);
-  } else if (currentTool === 'smartErase') {
-    if (smartEraseActive) {
-      smartErase(toX, toY, true);
-    }
-  }
-}
-
-// Function to draw a dot or erase a dot - on both canvases
-function drawDot(x, y) {
-  if (!drawingCtx || !topDrawingCtx) return;
-  
-  if (currentTool === 'draw') {
-    drawingCtx.fillStyle = currentColor;
-    drawingCtx.beginPath();
-    drawingCtx.arc(x, y, currentBrushSize/2, 0, Math.PI * 2);
-    drawingCtx.fill();
-    
-    topDrawingCtx.fillStyle = currentColor;
-    topDrawingCtx.beginPath();
-    topDrawingCtx.arc(x, y, currentBrushSize/2, 0, Math.PI * 2);
-    topDrawingCtx.fill();
-    
-    allStrokes.push({
-      points: [{x: x, y: y}],
-      color: currentColor,
-      width: currentBrushSize,
-      isDot: true
-    });
-    
-  } else if (currentTool === 'erase') {
-    drawingCtx.globalCompositeOperation = 'destination-out';
-    drawingCtx.beginPath();
-    drawingCtx.arc(x, y, currentBrushSize, 0, Math.PI * 2);
-    drawingCtx.fill();
-    drawingCtx.globalCompositeOperation = 'source-over';
-    
-    topDrawingCtx.globalCompositeOperation = 'destination-out';
-    topDrawingCtx.beginPath();
-    topDrawingCtx.arc(x, y, currentBrushSize, 0, Math.PI * 2);
-    topDrawingCtx.fill();
-    topDrawingCtx.globalCompositeOperation = 'source-over';
-  } else if (currentTool === 'smartErase') {
-    smartErase(x, y, false);
-  }
-}
-
-// Update status indicators
-function updateStatusIndicators() {
-  if (syncMode) {
-    topPdfStatus.innerHTML = '<span style="color: #9c27b0;">(Sync Mode)</span>';
-    mainBoardStatus.innerHTML = '<span style="color: #9c27b0;">(Sync Mode)</span>';
-    syncStatus.style.display = 'block';
-    adjStatus.style.display = 'none';
-  } else if (adjMode) {
-    topPdfStatus.innerHTML = '<span style="color: #ff9800;">(Adjustable)</span>';
-    mainBoardStatus.innerHTML = '<span style="color: #666;">(Drawing Only)</span>';
-    adjStatus.style.display = 'block';
-    syncStatus.style.display = 'none';
-  } else {
-    topPdfStatus.innerHTML = '<span style="color: #666;">(Fixed View)</span>';
-    mainBoardStatus.innerHTML = '<span style="color: #2196f3;">(Zoom + Pan + Draw)</span>';
-    adjStatus.style.display = 'none';
-    syncStatus.style.display = 'none';
-  }
-}
-
-// PDF Upload and Rendering
-pdfUpload.addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (file && file.type === 'application/pdf') {
-    loading.style.display = 'block';
-    pdfInfo.style.display = 'none';
-    
-    const reader = new FileReader();
-    reader.onload = function(event) {
-      const typedarray = new Uint8Array(event.target.result);
-      
-      pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
-        pdfDoc = pdf;
-        totalPages = pdf.numPages;
-        currentPage = 1;
-        
-        pdfControls.style.display = 'flex';
-        updatePageInfo();
-        
-        renderPDFPage(currentPage);
-      }).catch(function(error) {
-        console.error('Error loading PDF:', error);
-        alert('Error loading PDF. Please try another file.');
-        loading.style.display = 'none';
+        return true;
       });
+      if(removed) {
+        redrawAllStrokes();
+        saveHistory();
+      }
+    }
+    redrawAll();
+  }
+  
+  function redrawAllStrokes() {
+    mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height);
+    topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height);
+    currentStrokes.forEach(s => {
+      mainDrawCtx.strokeStyle = s.color; mainDrawCtx.lineWidth = s.width;
+      topDrawCtx.strokeStyle = s.color; topDrawCtx.lineWidth = s.width;
+      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(s.points[0].x, s.points[0].y);
+      topDrawCtx.beginPath(); topDrawCtx.moveTo(s.points[0].x, s.points[0].y);
+      for(let i=1;i<s.points.length;i++) {
+        mainDrawCtx.lineTo(s.points[i].x, s.points[i].y);
+        topDrawCtx.lineTo(s.points[i].x, s.points[i].y);
+      }
+      mainDrawCtx.stroke(); topDrawCtx.stroke();
+    });
+    redrawAll();
+  }
+  
+  function finalizeStroke() {
+    if(currentStrokePoints.length === 0) return;
+    currentStrokes.push({ points: [...currentStrokePoints], color: penColor, width: penSize, isDot: currentStrokePoints.length===1 });
+    saveHistory();
+    currentStrokePoints = [];
+  }
+  
+  // ========== PDF HANDLER ==========
+  document.getElementById('pdfUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const pdfData = new Uint8Array(ev.target.result);
+      const pdfDoc = await pdfjsLib.getDocument(pdfData).promise;
+      const page = await pdfDoc.getPage(1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      setCanvasSize(viewport.width, viewport.height);
+      pdfOffCtx.fillStyle = 'white'; pdfOffCtx.fillRect(0,0,viewport.width,viewport.height);
+      await page.render({ canvasContext: pdfOffCtx, viewport }).promise;
+      hasContent = true;
+      redrawAll();
+      showToast('PDF loaded!');
     };
     reader.readAsArrayBuffer(file);
-  }
-});
-
-// Render PDF page
-function renderPDFPage(pageNum) {
-  if (!pdfDoc || isRendering) return;
-  
-  isRendering = true;
-  loading.style.display = 'block';
-  
-  pdfDoc.getPage(pageNum).then(function(page) {
-    const viewport = page.getViewport({ scale: 1.0 });
-    const pdfWidth = viewport.width;
-    const pdfHeight = viewport.height;
-    
-    pdfBaseWidth = pdfWidth;
-    pdfBaseHeight = pdfHeight;
-    
-    updateContainerRatios(pdfWidth, pdfHeight);
-    
-    const canvasWidth = Math.floor(pdfWidth);
-    const canvasHeight = Math.floor(pdfHeight);
-    
-    initializeCanvases(canvasWidth, canvasHeight);
-    initializeTopPdf(canvasWidth, canvasHeight);
-    
-    pdfCtx.fillStyle = '#ffffff';
-    pdfCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-    
-    const renderViewport = page.getViewport({ 
-      scale: 1.0
-    });
-    
-    const renderContext = {
-      canvasContext: pdfCtx,
-      viewport: renderViewport
-    };
-    
-    return page.render(renderContext).promise;
-  }).then(function() {
-    hasPDF = true;
-    
-    initializeDrawingBuffersForPage(currentPage);
-    
-    scale = 1;
-    offsetX = 0;
-    offsetY = 0;
-    topScale = 1;
-    topOffsetX = 0;
-    topOffsetY = 0;
-    
-    if (pageAdjPositions[currentPage]) {
-      delete pageAdjPositions[currentPage];
-    }
-    
-    redrawMain();
-    redrawTop();
-    
-    pdfInfo.innerHTML = `✅ PDF Page ${currentPage} loaded! You can now draw on both canvases.`;
-    pdfInfo.style.display = 'block';
-    loading.style.display = 'none';
-    isRendering = false;
-    
-  }).catch(function(error) {
-    console.error('Error rendering PDF page:', error);
-    loading.style.display = 'none';
-    isRendering = false;
   });
-}
-
-// Update page info display
-function updatePageInfo() {
-  pageInfo.textContent = `Page ${currentPage}/${totalPages}`;
-  prevPageBtn.disabled = currentPage <= 1;
-  nextPageBtn.disabled = currentPage >= totalPages;
-}
-
-// PDF page navigation
-prevPageBtn.addEventListener('click', function() {
-  if (currentPage > 1 && !isRendering) {
-    saveAdjPosition();
-    currentPage--;
-    updatePageInfo();
-    renderPDFPage(currentPage);
+  
+  // ========== MCQ / TXT PARSER ==========
+  document.getElementById('quizUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target.result;
+      const lines = content.split('\n');
+      let html = '<h4>📖 MCQs from file:</h4>';
+      let qNum = 1;
+      for(let line of lines) {
+        line = line.trim();
+        if(line.match(/^[0-9]+[\.\)]/) || line.match(/^Q/) || (line.length > 5 && !line.startsWith('A)') && !line.startsWith('B)') && !line.startsWith('C)') && !line.startsWith('D)'))) {
+          html += `<div class="quiz-item"><strong>Q${qNum++}. ${line}</strong><br>`;
+        } else if(line.startsWith('A)') || line.startsWith('B)') || line.startsWith('C)') || line.startsWith('D)')) {
+          html += `<div class="option">${line}</div>`;
+        } else if(line.startsWith('Ans:') || line.startsWith('Answer:')) {
+          html += `<div style="color:green; margin-top:5px;">✅ ${line}</div>`;
+        }
+      }
+      html += '</div>';
+      document.getElementById('quizContent').innerHTML = html;
+      showToast('MCQs loaded! Click "Show Quiz"');
+    };
+    reader.readAsText(file);
+  });
+  
+  document.getElementById('showQuizModalBtn').onclick = () => document.getElementById('quizModal').style.display = 'flex';
+  
+  // ========== IMAGE HANDLER (Single + ZIP) ==========
+  function addImageToCanvas(imgElement) {
+    const imgWidth = 300, imgHeight = (imgElement.height/imgElement.width)*300;
+    images.push({ img: imgElement, x: 100, y: 100, width: imgWidth, height: imgHeight, rotation: 0, flipH: false, flipV: false });
+    drawAllImages();
+    document.getElementById('imageEditTools').style.display = 'flex';
+    selectedImageIndex = images.length-1;
+    showToast('Image added! Use tools to resize/rotate/flip');
   }
-});
-
-nextPageBtn.addEventListener('click', function() {
-  if (currentPage < totalPages && !isRendering) {
-    saveAdjPosition();
-    currentPage++;
-    updatePageInfo();
-    renderPDFPage(currentPage);
-  }
-});
-
-// MOUSE events (draw) - Only for main canvas
-mainCanvas.addEventListener('mousedown', e => {
-  if (adjMode || syncMode) return;
   
-  drawing = true;
-  isTap = true;
-  last = getPosFromEvent(e);
-  
-  if (currentTool === 'draw') {
-    currentStroke = [];
-  } else if (currentTool === 'smartErase') {
-    smartEraseActive = true;
-    smartEraseLastPos = last;
-    saveState();
-  } else {
-    saveState();
-  }
-});
-
-window.addEventListener('mousemove', e => {
-  if(!drawing || adjMode || syncMode) return;
-  
-  isTap = false;
-  
-  const p = getPosFromEvent(e);
-  
-  drawSmoothLine(last.x, last.y, p.x, p.y);
-  
-  last = p;
-  
-  redrawMain();
-  redrawTop();
-});
-
-window.addEventListener('mouseup', e => {
-  if(drawing) {
-    if(isTap && !adjMode && !syncMode) {
-      const p = getPosFromEvent(e);
-      drawDot(p.x, p.y);
-      redrawMain();
-      redrawTop();
-    }
-    
-    if (currentTool === 'draw' && currentStroke.length > 1) {
-      allStrokes.push({
-        points: [...currentStroke],
-        color: currentColor,
-        width: currentBrushSize,
-        isDot: false
+  function drawAllImages() {
+    images.forEach((imgData, idx) => {
+      [mainDrawCtx, topDrawCtx].forEach(ctx => {
+        ctx.save();
+        ctx.translate(imgData.x + imgData.width/2, imgData.y + imgData.height/2);
+        ctx.rotate(imgData.rotation * Math.PI/180);
+        ctx.scale(imgData.flipH ? -1 : 1, imgData.flipV ? -1 : 1);
+        ctx.drawImage(imgData.img, -imgData.width/2, -imgData.height/2, imgData.width, imgData.height);
+        ctx.restore();
       });
-      currentStroke = [];
-      saveState();
-    }
-    
-    if (currentTool === 'smartErase') {
-      smartEraseActive = false;
-      smartEraseLastPos = null;
-    }
+    });
+    redrawAll();
   }
-  drawing = false;
-});
-
-// TOUCH events for MAIN CANVAS
-mainCanvas.addEventListener('touchstart', e => {
-  if(adjMode || syncMode) return;
   
-  if(e.touches.length === 1){
-    drawing = true;
-    isTap = true;
-    last = getPosFromEvent(e);
-    
-    if (currentTool === 'draw') {
-      currentStroke = [];
-    } else if (currentTool === 'smartErase') {
-      smartEraseActive = true;
-      smartEraseLastPos = last;
-      saveState();
-    } else {
-      saveState();
-    }
-  } else if(e.touches.length === 2 && !adjMode && !syncMode){
-    drawing = false;
-    lastDist = getTouchDistance(e.touches[0], e.touches[1]);
-    lastMidpoint = getTouchMidpoint(e.touches[0], e.touches[1]);
-  }
-});
-
-mainCanvas.addEventListener('touchmove', e => {
-  if(adjMode || syncMode) return;
+  document.getElementById('imageUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const img = new Image();
+    img.onload = () => addImageToCanvas(img);
+    img.src = URL.createObjectURL(file);
+  });
   
-  e.preventDefault();
-  if(e.touches.length === 1 && drawing){
-    isTap = false;
-    
-    const p = getPosFromEvent(e);
-    
-    drawSmoothLine(last.x, last.y, p.x, p.y);
-    
-    last = p;
-    
-    redrawMain();
-    redrawTop();
-  } else if(e.touches.length === 2 && !adjMode && !syncMode){
-    const t1 = e.touches[0];
-    const t2 = e.touches[1];
-    const newDist = getTouchDistance(t1, t2);
-    const newMidpoint = getTouchMidpoint(t1, t2);
-    
-    if(lastDist && lastMidpoint){
-      const zoom = newDist / lastDist;
-      
-      const worldX = (lastMidpoint.x - offsetX) / scale;
-      const worldY = (lastMidpoint.y - offsetY) / scale;
-
-      scale *= zoom;
-      scale = Math.max(0.1, Math.min(10, scale));
-
-      offsetX = lastMidpoint.x - worldX * scale;
-      offsetY = lastMidpoint.y - worldY * scale;
-      
-      offsetX += newMidpoint.x - lastMidpoint.x;
-      offsetY += newMidpoint.y - lastMidpoint.y;
-    }
-    
-    lastDist = newDist;
-    lastMidpoint = newMidpoint;
-    redrawMain();
-    redrawTop();
-  }
-}, { passive: false });
-
-// TOUCH events for TOP PDF (only in ADJ mode or SYNC mode)
-topPdf.addEventListener('touchstart', e => {
-  if(!adjMode && !syncMode) return;
-  
-  if(e.touches.length === 2){
-    e.preventDefault();
-    lastDist = getTouchDistance(e.touches[0], e.touches[1]);
-    lastMidpoint = getTouchMidpoint(e.touches[0], e.touches[1], topPdf);
-  }
-});
-
-topPdf.addEventListener('touchmove', e => {
-  if(!adjMode && !syncMode) return;
-  
-  if(e.touches.length === 2){
-    e.preventDefault();
-    const t1 = e.touches[0];
-    const t2 = e.touches[1];
-    const newDist = getTouchDistance(t1, t2);
-    const newMidpoint = getTouchMidpoint(t1, t2, topPdf);
-    
-    if(lastDist && lastMidpoint){
-      const zoom = newDist / lastDist;
-      
-      const worldX = (lastMidpoint.x - topOffsetX) / topScale;
-      const worldY = (lastMidpoint.y - topOffsetY) / topScale;
-
-      topScale *= zoom;
-      topScale = Math.max(0.1, Math.min(10, topScale));
-
-      topOffsetX = lastMidpoint.x - worldX * topScale;
-      topOffsetY = lastMidpoint.y - worldY * topScale;
-      
-      topOffsetX += newMidpoint.x - lastMidpoint.x;
-      topOffsetY += newMidpoint.y - lastMidpoint.y;
-      
-      if (syncMode) {
-        syncViews();
-      } else {
-        saveAdjPosition();
+  document.getElementById('zipUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const JSZip = window.JSZip;
+    const zip = await JSZip.loadAsync(file);
+    const imagesList = [];
+    for(let [filename, zipEntry] of Object.entries(zip.files)) {
+      if(/\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) {
+        const blob = await zipEntry.async('blob');
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        await new Promise((resolve) => { img.onload = resolve; img.src = url; });
+        imagesList.push(img);
       }
     }
-    
-    lastDist = newDist;
-    lastMidpoint = newMidpoint;
-    redrawTop();
-    
-    if (syncMode) {
-      redrawMain();
+    for(let img of imagesList) addImageToCanvas(img);
+    showToast(`${imagesList.length} images added from ZIP!`);
+  });
+  
+  // Image transform tools
+  document.getElementById('scaleUpBtn').onclick = () => {
+    if(selectedImageIndex>=0) {
+      images[selectedImageIndex].width *= 1.1;
+      images[selectedImageIndex].height *= 1.1;
+      drawAllImages(); saveHistory();
     }
-  }
-}, { passive: false });
-
-mainCanvas.addEventListener('touchend', e => {
-  if(adjMode || syncMode) return;
+  };
+  document.getElementById('scaleDownBtn').onclick = () => {
+    if(selectedImageIndex>=0) {
+      images[selectedImageIndex].width *= 0.9;
+      images[selectedImageIndex].height *= 0.9;
+      drawAllImages(); saveHistory();
+    }
+  };
+  document.getElementById('rotateBtn').onclick = () => {
+    if(selectedImageIndex>=0) {
+      images[selectedImageIndex].rotation = (images[selectedImageIndex].rotation + 90) % 360;
+      drawAllImages(); saveHistory();
+    }
+  };
+  document.getElementById('flipHBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images[selectedImageIndex].flipH = !images[selectedImageIndex].flipH; drawAllImages(); saveHistory(); }
+  };
+  document.getElementById('flipVBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images[selectedImageIndex].flipV = !images[selectedImageIndex].flipV; drawAllImages(); saveHistory(); }
+  };
+  document.getElementById('deleteImageBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images.splice(selectedImageIndex,1); selectedImageIndex = -1; drawAllImages(); saveHistory(); if(images.length===0) document.getElementById('imageEditTools').style.display = 'none'; }
+  };
   
-  if(e.touches.length === 0 && drawing && isTap) {
-    const p = getPosFromEvent(e);
-    drawDot(p.x, p.y);
-    redrawMain();
-    redrawTop();
+  // ========== DRAWING HANDLERS ==========
+  function startDraw(e) { isDrawing=true; isTap=true; lastPoint = getCanvasCoords(e, mainCanvas); if(currentTool!=='smartErase') saveHistory(); currentStrokePoints=[]; }
+  function drawMove(e) {
+    if(!isDrawing) return;
+    const p = getCanvasCoords(e, mainCanvas);
+    if(isTap && Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y)<2) return;
+    isTap=false;
+    drawStroke(lastPoint, p, false);
+    currentStrokePoints.push({x:p.x, y:p.y});
+    lastPoint = p;
   }
+  function endDraw(e) {
+    if(!isDrawing) return;
+    if(isTap) { const p = getCanvasCoords(e, mainCanvas); drawStroke(p, p, true); currentStrokePoints.push({x:p.x,y:p.y}); finalizeStroke(); }
+    else { finalizeStroke(); }
+    isDrawing=false;
+  }
+  mainCanvas.addEventListener('mousedown', startDraw);
+  window.addEventListener('mousemove', drawMove);
+  window.addEventListener('mouseup', endDraw);
+  mainCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); if(e.touches.length===1) startDraw(e); else if(e.touches.length===2) { pinchDist = getDistance(e.touches[0], e.touches[1]); pinchMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas); isDrawing=false; } });
+  mainCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); if(e.touches.length===1) drawMove(e); else if(e.touches.length===2) { const newDist = getDistance(e.touches[0], e.touches[1]); const newMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas); if(pinchDist) { const zoom = newDist/pinchDist; const worldX = (pinchMid.x - offsetX)/scale; const worldY = (pinchMid.y - offsetY)/scale; scale *= zoom; scale = Math.min(12, Math.max(0.2, scale)); offsetX = pinchMid.x - worldX*scale; offsetY = pinchMid.y - worldY*scale; offsetX += newMid.x - pinchMid.x; offsetY += newMid.y - pinchMid.y; redrawAll(); } pinchDist = newDist; pinchMid = newMid; } });
+  mainCanvas.addEventListener('touchend', (e) => { if(e.touches.length<2) pinchDist=0; if(e.touches.length===0 && isDrawing) endDraw(e); });
+  function getDistance(a,b) { return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
+  function getMidpoint(a,b, ref) { const rect = ref.getBoundingClientRect(); return { x: ((a.clientX+b.clientX)/2 - rect.left) * (ref.width/rect.width), y: ((a.clientY+b.clientY)/2 - rect.top) * (ref.height/rect.height) }; }
   
-  if (drawing && currentTool === 'draw' && currentStroke.length > 1) {
-    allStrokes.push({
-      points: [...currentStroke],
-      color: currentColor,
-      width: currentBrushSize,
-      isDot: false
-    });
-    currentStroke = [];
-    saveState();
-  }
+  // ========== UI BUTTONS ==========
+  document.getElementById('drawModeBtn').onclick = () => { currentTool='draw'; ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(id=>document.getElementById(id).classList.remove('active')); document.getElementById('drawModeBtn').classList.add('active'); };
+  document.getElementById('eraserBtn').onclick = () => { currentTool='eraser'; ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(id=>document.getElementById(id).classList.remove('active')); document.getElementById('eraserBtn').classList.add('active'); };
+  document.getElementById('smartEraseBtn').onclick = () => { currentTool='smartErase'; ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(id=>document.getElementById(id).classList.remove('active')); document.getElementById('smartEraseBtn').classList.add('active'); };
+  document.getElementById('clearAllBtn').onclick = () => { if(confirm('Clear all?')) { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); currentStrokes=[]; images=[]; saveHistory(); redrawAll(); } };
+  document.getElementById('undoBtn').onclick = undo;
+  document.getElementById('redoBtn').onclick = redo;
+  document.getElementById('penColor').addEventListener('input', (e) => penColor = e.target.value);
+  document.getElementById('brushWidth').addEventListener('input', (e) => { penSize = parseInt(e.target.value); document.getElementById('sizeLabel').innerText = penSize+'px'; });
   
-  if (currentTool === 'smartErase') {
-    smartEraseActive = false;
-    smartEraseLastPos = null;
+  // ========== TELEGRAM & RECORDING ==========
+  async function testTelegram() { try { const r = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/getMe`); const j = await r.json(); showToast(j.ok ? 'Bot OK' : 'Failed', !j.ok); } catch(e) { showToast('Network error', true); } }
+  async function uploadToTelegram(blob, filename) {
+    const fd = new FormData(); fd.append('chat_id', TELEGRAM.CHAT_ID); fd.append('document', blob, filename);
+    try { const res = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/sendDocument`, { method: 'POST', body: fd }); return (await res.json()).ok; } catch(e) { return false; }
   }
+  async function startRecording() {
+    if(isRecording) { if(mediaRecorder) mediaRecorder.stop(); if(recordingInterval) clearInterval(recordingInterval); isRecording=false; document.getElementById('recIndicator').style.display='none'; showToast('Recording saved'); return; }
+    let audioTracks = null;
+    if(isMicEnabled) { try { const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); audioTracks = audioStream.getAudioTracks(); } catch(e){} }
+    hiddenRecordCanvas.width = topCanvas.width; hiddenRecordCanvas.height = topCanvas.height;
+    const canvasStream = hiddenRecordCanvas.captureStream(20);
+    let finalStream = canvasStream;
+    if(audioTracks && audioTracks.length) finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' });
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = e => { if(e.data.size) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      await uploadToTelegram(blob, `whiteboard_${Date.now()}.webm`);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'recording.webm'; a.click();
+      if(recordingInterval) clearInterval(recordingInterval);
+    };
+    recordingInterval = setInterval(() => { hiddenRecordCtx.drawImage(topCanvas, 0, 0); }, 40);
+    mediaRecorder.start(500);
+    isRecording=true; document.getElementById('recIndicator').style.display='block';
+  }
+  async function enableMic() { try { if(micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream=null; isMicEnabled=false; showToast('Mic disabled'); return; } const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); micStream=stream; isMicEnabled=true; showToast('Mic ready'); } catch(e){ showToast('Mic denied',true); } }
+  document.getElementById('recordBtn').onclick = startRecording;
+  document.getElementById('testTelegramBtn').onclick = testTelegram;
+  document.getElementById('toggleMicBtn') || (()=>{})();
+  window.closeModal = (id) => document.getElementById(id).style.display = 'none';
   
-  if(e.touches.length < 2) {
-    lastDist = 0;
-    lastMidpoint = null;
-  }
-  if(e.touches.length === 0) drawing = false;
-});
-
-function getTouchDistance(a,b){
-  const dx = a.clientX - b.clientX;
-  const dy = a.clientY - b.clientY;
-  return Math.hypot(dx,dy);
-}
-
-// Tool selection
-drawBtn.addEventListener('click', () => {
-  currentTool = 'draw';
-  drawBtn.classList.add('active');
-  eraseBtn.classList.remove('active');
-  smartEraseBtn.classList.remove('active');
-  adjBtn.classList.remove('adj-active');
-  syncBtn.classList.remove('sync-active');
-  adjMode = false;
-  syncMode = false;
-  updateStatusIndicators();
-});
-
-eraseBtn.addEventListener('click', () => {
-  currentTool = 'erase';
-  eraseBtn.classList.add('active');
-  drawBtn.classList.remove('active');
-  smartEraseBtn.classList.remove('active');
-  adjBtn.classList.remove('adj-active');
-  syncBtn.classList.remove('sync-active');
-  adjMode = false;
-  syncMode = false;
-  updateStatusIndicators();
-});
-
-smartEraseBtn.addEventListener('click', () => {
-  currentTool = 'smartErase';
-  smartEraseBtn.classList.add('active');
-  drawBtn.classList.remove('active');
-  eraseBtn.classList.remove('active');
-  adjBtn.classList.remove('adj-active');
-  syncBtn.classList.remove('sync-active');
-  adjMode = false;
-  syncMode = false;
-  updateStatusIndicators();
-});
-
-// Clear Canvas Button - FIXED
-clearBtn.addEventListener('click', () => {
-  if (confirm('Are you sure you want to clear both canvases? This cannot be undone.')) {
-    clearCanvas();
-  }
-});
-
-// ADJ Button Toggle
-adjBtn.addEventListener('click', () => {
-  adjMode = !adjMode;
-  if (adjMode) {
-    adjBtn.classList.add('adj-active');
-    drawBtn.classList.remove('active');
-    eraseBtn.classList.remove('active');
-    smartEraseBtn.classList.remove('active');
-    syncBtn.classList.remove('sync-active');
-    syncMode = false;
-    loadAdjPosition();
-    redrawTop();
-  } else {
-    adjBtn.classList.remove('adj-active');
-    saveAdjPosition();
-  }
-  updateStatusIndicators();
-});
-
-// SYNC Button Toggle
-syncBtn.addEventListener('click', () => {
-  syncMode = !syncMode;
-  if (syncMode) {
-    syncBtn.classList.add('sync-active');
-    drawBtn.classList.remove('active');
-    eraseBtn.classList.remove('active');
-    smartEraseBtn.classList.remove('active');
-    adjBtn.classList.remove('adj-active');
-    adjMode = false;
-    
-    scale = topScale;
-    offsetX = topOffsetX;
-    offsetY = topOffsetY;
-    
-    loadAdjPosition();
-    redrawMain();
-    redrawTop();
-  } else {
-    syncBtn.classList.remove('sync-active');
-    saveAdjPosition();
-  }
-  updateStatusIndicators();
-});
-
-// Reset ADJ Button
-resetAdjBtn.addEventListener('click', () => {
-  resetAdjPosition();
-});
-
-// Color selection
-customColor.addEventListener('input', () => {
-  currentColor = customColor.value;
-});
-
-// Brush size
-brushSize.addEventListener('input', () => {
-  currentBrushSize = parseInt(brushSize.value);
-  brushSizeValue.textContent = `${currentBrushSize}px`;
-});
-
-// Undo/Redo
-undoBtn.addEventListener('click', undo);
-redoBtn.addEventListener('click', redo);
-
-// Make sure initial preview shows up
-redrawTop();
-redrawMain();
-updateStatusIndicators();
-
-// Save initial state
-saveState();
-
-// Initialize Telegram connection
-window.addEventListener('load', () => {
-  // First test Telegram connection
-  setTimeout(() => {
-    testTelegram();
-  }, 1000);
-  
-  // Setup recording button
-  document.getElementById('recordBtn').addEventListener('click', toggleRecording);
-  
-  // Setup microphone buttons
-  document.getElementById('micTestBtn').addEventListener('click', testMicrophone);
-  document.getElementById('enableMicBtn').addEventListener('click', enableMicrophoneForRecording);
-});
-
+  setCanvasSize(1200, 675);
+  saveHistory();
+  testTelegram();
 </script>
 </body>
 </html>
