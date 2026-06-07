@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Ultimate Whiteboard | PDF + MCQ Slides + Drawing on Top</title>
+  <title>Ultimate Whiteboard Pro | PDF + MCQ + Images + Smooth Drawing</title>
   <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
@@ -66,10 +66,16 @@
     input[type="range"] { width: 100px; }
     .board-container {
       display: flex;
-      flex-direction: column;
       flex: 1;
       gap: 12px;
       min-height: 0;
+      position: relative;
+    }
+    .canvas-area {
+      flex: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
     .board-card {
       background: #1e1e2f;
@@ -113,33 +119,49 @@
       font-size: 11px;
       pointer-events: none;
     }
-    .slide-panel {
-      background: #0f3460;
-      border-radius: 40px;
-      padding: 6px 15px;
+    /* Right Sidebar for Slides */
+    .slide-sidebar {
+      width: 280px;
+      background: #16213e;
+      border-radius: 20px;
       display: flex;
-      align-items: center;
-      gap: 15px;
+      flex-direction: column;
+      overflow: hidden;
       flex-shrink: 0;
     }
-    .slide-thumbnails {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      max-width: 500px;
-      padding: 4px;
-    }
-    .slide-thumb {
-      background: #533483;
-      border-radius: 10px;
-      padding: 4px 12px;
-      font-size: 11px;
-      cursor: pointer;
-      color: white;
-      white-space: nowrap;
-    }
-    .slide-thumb.active {
+    .sidebar-header {
+      padding: 12px;
       background: #e94560;
+      color: white;
+      font-weight: bold;
+      text-align: center;
+    }
+    .slide-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .slide-item {
+      background: #0f3460;
+      border-radius: 12px;
+      padding: 10px;
+      cursor: pointer;
+      transition: 0.2s;
+      color: white;
+      font-size: 12px;
+    }
+    .slide-item:hover { background: #e94560; transform: scale(1.02); }
+    .slide-item.active { background: #e94560; border-left: 4px solid yellow; }
+    .font-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0f3460;
+      padding: 5px 10px;
+      border-radius: 30px;
     }
     .recording-indicator {
       position: fixed;
@@ -152,7 +174,6 @@
       animation: pulse 1s infinite;
       display: none;
       z-index: 1500;
-      font-size: 12px;
     }
     @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
     .mic-status {
@@ -177,8 +198,8 @@
 <div class="toolbar">
   <div class="tool-group">
     <input type="color" id="penColor" value="#000000">
-    <input type="range" id="brushWidth" min="1" max="40" value="3">
-    <span id="sizeLabel" style="color:white;">3px</span>
+    <input type="range" id="brushWidth" min="1" max="40" value="4">
+    <span id="sizeLabel" style="color:white;">4px</span>
   </div>
   <div class="tool-group">
     <button id="drawModeBtn" class="active">✏️ Draw</button>
@@ -193,6 +214,16 @@
     <label for="pdfUpload" class="file-label">📄 PDF</label>
     <input type="file" id="quizUpload" accept=".txt" style="display:none">
     <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 MCQ Slides</label>
+    <input type="file" id="imageUpload" accept="image/*" style="display:none">
+    <label for="imageUpload" class="file-label" style="background:#16a085;">🖼️ Add Image</label>
+  </div>
+  <div class="tool-group">
+    <div class="font-control">
+      <span style="color:white;">🔤 MCQ Font:</span>
+      <button id="fontMinus" class="secondary" style="padding:2px 8px;">A-</button>
+      <span id="fontSizeDisplay" style="color:white; min-width:40px;">18px</span>
+      <button id="fontPlus" class="secondary" style="padding:2px 8px;">A+</button>
+    </div>
   </div>
   <div class="tool-group">
     <button id="recordBtn" class="danger-btn">🔴 Record + Telegram</button>
@@ -201,29 +232,28 @@
   </div>
 </div>
 
-<!-- Slide Navigator Panel (only shows when MCQ loaded) -->
-<div class="slide-panel" id="slidePanel" style="display:none;">
-  <span style="color:white;">📽️ Slides:</span>
-  <button id="prevSlideBtn" class="secondary" style="background:#e94560;">◀ Prev</button>
-  <span id="slideCounter" style="color:white; font-weight:bold;">1/1</span>
-  <button id="nextSlideBtn" class="secondary" style="background:#e94560;">Next ▶</button>
-  <div id="slideThumbnails" class="slide-thumbnails"></div>
-</div>
-
 <div class="board-container">
-  <div class="board-card">
-    <div class="board-header">📄 TOP: Fixed View (PDF/MCQ + Drawing)</div>
-    <div class="canvas-holder" id="topHolder">
-      <canvas id="topCanvas"></canvas>
-      <div class="status-badge" id="topStatus">Fixed View</div>
+  <div class="canvas-area">
+    <div class="board-card">
+      <div class="board-header">📄 TOP: Fixed View (PDF/MCQ/Images + Drawing)</div>
+      <div class="canvas-holder" id="topHolder">
+        <canvas id="topCanvas"></canvas>
+        <div class="status-badge" id="topStatus">Fixed View</div>
+      </div>
+    </div>
+    <div class="board-card">
+      <div class="board-header">✍️ BOTTOM: Zoomable Canvas (Pinch 0.2x–12x • Pan • Draw)</div>
+      <div class="canvas-holder" id="mainHolder">
+        <canvas id="mainCanvas"></canvas>
+        <div class="status-badge" id="mainStatus">Zoom + Draw</div>
+      </div>
     </div>
   </div>
-  <div class="board-card">
-    <div class="board-header">✍️ BOTTOM: Zoomable Canvas (Pinch 0.2x–12x • Pan • Draw)</div>
-    <div class="canvas-holder" id="mainHolder">
-      <canvas id="mainCanvas"></canvas>
-      <div class="status-badge" id="mainStatus">Zoom + Draw</div>
-    </div>
+  
+  <!-- Right Sidebar for Slides -->
+  <div class="slide-sidebar" id="slideSidebar" style="display:none;">
+    <div class="sidebar-header">📚 MCQ SLIDES</div>
+    <div class="slide-list" id="slideList"></div>
   </div>
 </div>
 
@@ -237,7 +267,7 @@
   let topCtx = topCanvas.getContext('2d');
   let mainCtx = mainCanvas.getContext('2d');
   
-  // LAYERS: Background (PDF/MCQ) + Drawing (user strokes)
+  // LAYERS
   let backgroundCanvas = document.createElement('canvas');
   let bgCtx = backgroundCanvas.getContext('2d');
   let drawingLayerMain = document.createElement('canvas');
@@ -245,24 +275,37 @@
   let mainDrawCtx = drawingLayerMain.getContext('2d');
   let topDrawCtx = drawingLayerTop.getContext('2d');
   
+  // Improve drawing quality
+  mainDrawCtx.lineCap = 'round';
+  mainDrawCtx.lineJoin = 'round';
+  topDrawCtx.lineCap = 'round';
+  topDrawCtx.lineJoin = 'round';
+  
   // Drawing data
   let currentStrokes = [];
   let currentStrokePoints = [];
   let historyStack = []; let historyIndex = -1;
   let currentTool = 'draw';
   let penColor = '#000000';
-  let penSize = 3;
+  let penSize = 4;
   
-  // Transform for bottom canvas (zoom + pan)
+  // Transform for bottom canvas
   let scale = 1, offsetX = 0, offsetY = 0;
   
-  // Content type: 'pdf' or 'mcq'
+  // Content
   let contentType = 'none';
   let pdfDoc = null;
   let slides = [];
   let currentSlideIndex = 0;
+  let mcqFontSize = 18;
   
-  // Drawing event flags
+  // Images with drag support
+  let images = [];
+  let selectedImageIndex = -1;
+  let isDraggingImage = false;
+  let dragStart = {x:0, y:0};
+  
+  // Drawing flags
   let isDrawing = false, lastPoint = {x:0,y:0}, isTap = false;
   let pinchDist = 0, pinchMid = {x:0,y:0};
   
@@ -273,7 +316,15 @@
   const hiddenRecordCanvas = document.createElement('canvas');
   let hiddenRecordCtx = hiddenRecordCanvas.getContext('2d');
   
-  // ========== CORE DRAWING FUNCTIONS ==========
+  // ========== UTILITIES ==========
+  function showToast(msg, isError=false) {
+    const toast = document.getElementById('micStatusToast');
+    toast.textContent = msg;
+    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 3000);
+  }
+  
   function setCanvasSize(w, h) {
     topCanvas.width = w; topCanvas.height = h;
     mainCanvas.width = w; mainCanvas.height = h;
@@ -285,14 +336,14 @@
   }
   
   function redrawAll() {
-    // Bottom canvas (with zoom)
+    // Bottom with zoom
     mainCtx.setTransform(1,0,0,1,0,0);
     mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height);
     mainCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
     mainCtx.drawImage(backgroundCanvas, 0, 0);
     mainCtx.drawImage(drawingLayerMain, 0, 0);
     
-    // Top canvas (fixed)
+    // Top fixed
     topCtx.setTransform(1,0,0,1,0,0);
     topCtx.clearRect(0,0, topCanvas.width, topCanvas.height);
     topCtx.drawImage(backgroundCanvas, 0, 0);
@@ -343,8 +394,8 @@
   
   function drawStroke(from, to, isDot=false) {
     if(currentTool === 'draw') {
-      mainDrawCtx.strokeStyle = penColor; mainDrawCtx.lineWidth = penSize; mainDrawCtx.lineCap='round';
-      topDrawCtx.strokeStyle = penColor; topDrawCtx.lineWidth = penSize; topDrawCtx.lineCap='round';
+      mainDrawCtx.strokeStyle = penColor; mainDrawCtx.lineWidth = penSize; mainDrawCtx.lineCap='round'; mainDrawCtx.lineJoin='round';
+      topDrawCtx.strokeStyle = penColor; topDrawCtx.lineWidth = penSize; topDrawCtx.lineCap='round'; topDrawCtx.lineJoin='round';
       mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x,from.y); mainDrawCtx.lineTo(to.x,to.y); mainDrawCtx.stroke();
       topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x,from.y); topDrawCtx.lineTo(to.x,to.y); topDrawCtx.stroke();
       if(isDot) {
@@ -396,7 +447,7 @@
     currentStrokePoints = [];
   }
   
-  // ========== PDF FUNCTIONALITY (SAME AS BEFORE) ==========
+  // ========== PDF (High Quality) ==========
   document.getElementById('pdfUpload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if(!file) return;
@@ -405,19 +456,22 @@
       const pdfData = new Uint8Array(ev.target.result);
       pdfDoc = await pdfjsLib.getDocument(pdfData).promise;
       const page = await pdfDoc.getPage(1);
-      const viewport = page.getViewport({ scale: 1.5 });
+      // Use 2.5x scale for high resolution
+      const viewport = page.getViewport({ scale: 2.5 });
       setCanvasSize(viewport.width, viewport.height);
       bgCtx.fillStyle = 'white'; bgCtx.fillRect(0,0,viewport.width,viewport.height);
       await page.render({ canvasContext: bgCtx, viewport }).promise;
       contentType = 'pdf';
-      document.getElementById('slidePanel').style.display = 'none';
+      document.getElementById('slideSidebar').style.display = 'none';
+      // Reset transform for both canvases to show full PDF
+      scale = 1; offsetX = 0; offsetY = 0;
       redrawAll();
-      showToast('PDF loaded! You can draw on top of it.');
+      showToast('PDF loaded (high quality)! You can draw on top.');
     };
     reader.readAsArrayBuffer(file);
   });
   
-  // ========== MCQ SLIDE PARSER ==========
+  // ========== MCQ SLIDES ==========
   function parseSlides(content) {
     const rawSlides = content.split(/###/g);
     const slidesData = [];
@@ -440,57 +494,81 @@
   }
   
   function drawSlideOnBackground(slide, index) {
-    // Clear background
     bgCtx.fillStyle = 'white';
     bgCtx.fillRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
     
     let yPos = 80;
-    const lineHeight = 38;
-    const fontSize = 20;
+    const lineHeight = mcqFontSize + 12;
+    const qFontSize = mcqFontSize + 4;
     
-    bgCtx.font = `bold ${fontSize+2}px "Segoe UI"`;
+    bgCtx.font = `bold ${qFontSize}px "Segoe UI"`;
     bgCtx.fillStyle = '#1a5276';
-    bgCtx.fillText(`Q${index+1}. ${slide.q}`, 50, yPos);
-    yPos += lineHeight + 8;
+    wrapText(bgCtx, `Q${index+1}. ${slide.q}`, 50, yPos, backgroundCanvas.width - 100, lineHeight);
+    yPos += getTextHeight(bgCtx, `Q${index+1}. ${slide.q}`, backgroundCanvas.width - 100) + 8;
     
-    bgCtx.font = `${fontSize}px "Segoe UI"`;
+    bgCtx.font = `${mcqFontSize}px "Segoe UI"`;
     bgCtx.fillStyle = '#2c3e66';
-    if(slide.a) bgCtx.fillText(`A) ${slide.a}`, 70, yPos);
-    yPos += lineHeight;
-    if(slide.b) bgCtx.fillText(`B) ${slide.b}`, 70, yPos);
-    yPos += lineHeight;
-    if(slide.c) bgCtx.fillText(`C) ${slide.c}`, 70, yPos);
-    yPos += lineHeight;
-    if(slide.d) bgCtx.fillText(`D) ${slide.d}`, 70, yPos);
-    yPos += lineHeight + 8;
+    if(slide.a) { wrapText(bgCtx, `A) ${slide.a}`, 70, yPos, backgroundCanvas.width - 100, lineHeight); yPos += getTextHeight(bgCtx, `A) ${slide.a}`, backgroundCanvas.width - 100) + 5; }
+    if(slide.b) { wrapText(bgCtx, `B) ${slide.b}`, 70, yPos, backgroundCanvas.width - 100, lineHeight); yPos += getTextHeight(bgCtx, `B) ${slide.b}`, backgroundCanvas.width - 100) + 5; }
+    if(slide.c) { wrapText(bgCtx, `C) ${slide.c}`, 70, yPos, backgroundCanvas.width - 100, lineHeight); yPos += getTextHeight(bgCtx, `C) ${slide.c}`, backgroundCanvas.width - 100) + 5; }
+    if(slide.d) { wrapText(bgCtx, `D) ${slide.d}`, 70, yPos, backgroundCanvas.width - 100, lineHeight); yPos += getTextHeight(bgCtx, `D) ${slide.d}`, backgroundCanvas.width - 100) + 5; }
     
     if(slide.ans) {
-      bgCtx.font = `italic ${fontSize-1}px "Segoe UI"`;
+      bgCtx.font = `italic ${mcqFontSize-2}px "Segoe UI"`;
       bgCtx.fillStyle = '#27ae60';
-      bgCtx.fillText(`✓ Answer: ${slide.ans}`, 70, yPos);
+      wrapText(bgCtx, `✓ Answer: ${slide.ans}`, 70, yPos, backgroundCanvas.width - 100, lineHeight);
     }
     
     redrawAll();
-    
-    // Trigger MathJax
-    if(window.MathJax) {
-      MathJax.typesetPromise();
+    if(window.MathJax) MathJax.typesetPromise();
+  }
+  
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = text.split('');
+    let line = '';
+    let currentY = y;
+    for(let i = 0; i < words.length; i++) {
+      const testLine = line + words[i];
+      const metrics = ctx.measureText(testLine);
+      if(metrics.width > maxWidth && line.length > 0) {
+        ctx.fillText(line, x, currentY);
+        line = words[i];
+        currentY += lineHeight;
+      } else {
+        line = testLine;
+      }
     }
+    ctx.fillText(line, x, currentY);
+    return currentY + lineHeight;
+  }
+  
+  function getTextHeight(ctx, text, maxWidth) {
+    let lines = 1;
+    let line = '';
+    for(let i=0; i<text.length; i++) {
+      const testLine = line + text[i];
+      if(ctx.measureText(testLine).width > maxWidth && line.length > 0) {
+        lines++;
+        line = text[i];
+      } else {
+        line = testLine;
+      }
+    }
+    return lines * (mcqFontSize + 8);
   }
   
   function updateSlideDisplay() {
     if(!slides.length) return;
     drawSlideOnBackground(slides[currentSlideIndex], currentSlideIndex);
-    document.getElementById('slideCounter').innerHTML = `${currentSlideIndex+1}/${slides.length}`;
-    
-    const container = document.getElementById('slideThumbnails');
+    // Update sidebar list
+    const container = document.getElementById('slideList');
     container.innerHTML = '';
     slides.forEach((slide, idx) => {
-      const thumb = document.createElement('div');
-      thumb.className = 'slide-thumb' + (idx === currentSlideIndex ? ' active' : '');
-      thumb.textContent = `${idx+1}`;
-      thumb.onclick = () => { currentSlideIndex = idx; updateSlideDisplay(); };
-      container.appendChild(thumb);
+      const div = document.createElement('div');
+      div.className = 'slide-item' + (idx === currentSlideIndex ? ' active' : '');
+      div.innerHTML = `<strong>Slide ${idx+1}</strong><br>${slide.q.substring(0, 50)}${slide.q.length>50?'...':''}`;
+      div.onclick = () => { currentSlideIndex = idx; updateSlideDisplay(); };
+      container.appendChild(div);
     });
   }
   
@@ -499,15 +577,14 @@
     if(!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const content = ev.target.result;
-      slides = parseSlides(content);
+      slides = parseSlides(ev.target.result);
       if(slides.length) {
         setCanvasSize(1200, 800);
         contentType = 'mcq';
         currentSlideIndex = 0;
         updateSlideDisplay();
-        document.getElementById('slidePanel').style.display = 'flex';
-        showToast(`${slides.length} slides loaded! Draw on top using tools.`);
+        document.getElementById('slideSidebar').style.display = 'flex';
+        showToast(`${slides.length} slides loaded! Click on right sidebar to switch.`);
       } else {
         showToast('No valid slides! Use |Q| format with ###', true);
       }
@@ -515,75 +592,110 @@
     reader.readAsText(file);
   });
   
-  document.getElementById('prevSlideBtn').onclick = () => {
-    if(slides.length && currentSlideIndex > 0) {
-      currentSlideIndex--;
-      updateSlideDisplay();
-    }
-  };
-  document.getElementById('nextSlideBtn').onclick = () => {
-    if(slides.length && currentSlideIndex < slides.length-1) {
-      currentSlideIndex++;
-      updateSlideDisplay();
-    }
-  };
+  // Font size controls
+  document.getElementById('fontPlus').onclick = () => { mcqFontSize = Math.min(36, mcqFontSize+2); document.getElementById('fontSizeDisplay').innerText = mcqFontSize+'px'; if(slides.length) drawSlideOnBackground(slides[currentSlideIndex], currentSlideIndex); };
+  document.getElementById('fontMinus').onclick = () => { mcqFontSize = Math.max(12, mcqFontSize-2); document.getElementById('fontSizeDisplay').innerText = mcqFontSize+'px'; if(slides.length) drawSlideOnBackground(slides[currentSlideIndex], currentSlideIndex); };
   
-  // ========== DRAWING EVENT HANDLERS ==========
-  function startDraw(e) { 
-    isDrawing = true; 
-    isTap = true; 
-    lastPoint = getCanvasCoords(e); 
-    if(currentTool !== 'smartErase') saveHistory(); 
-    currentStrokePoints = []; 
+  // ========== IMAGES WITH DRAG ==========
+  function drawAllImages() {
+    images.forEach((imgData, idx) => {
+      [mainDrawCtx, topDrawCtx].forEach(ctx => {
+        ctx.save();
+        ctx.translate(imgData.x + imgData.width/2, imgData.y + imgData.height/2);
+        ctx.rotate(imgData.rotation * Math.PI/180);
+        ctx.scale(imgData.flipH ? -1 : 1, imgData.flipV ? -1 : 1);
+        ctx.drawImage(imgData.img, -imgData.width/2, -imgData.height/2, imgData.width, imgData.height);
+        ctx.restore();
+      });
+    });
+    redrawAll();
   }
   
-  function drawMove(e) {
-    if(!isDrawing) return;
-    const p = getCanvasCoords(e);
-    if(isTap && Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y) < 2) return;
-    isTap = false;
-    drawStroke(lastPoint, p, false);
-    currentStrokePoints.push({x:p.x, y:p.y});
-    lastPoint = p;
+  function addImageToCanvas(imgElement) {
+    const imgWidth = 250, imgHeight = (imgElement.height/imgElement.width)*250;
+    images.push({ img: imgElement, x: 100, y: 100, width: imgWidth, height: imgHeight, rotation: 0, flipH: false, flipV: false });
+    drawAllImages();
+    saveHistory();
+    showToast('Image added! Drag to move, use toolbar to resize/rotate (coming soon)');
   }
   
-  function endDraw(e) {
-    if(!isDrawing) return;
-    if(isTap) { 
-      const p = getCanvasCoords(e); 
-      drawStroke(p, p, true); 
-      currentStrokePoints.push({x:p.x, y:p.y}); 
-      finalizeStroke(); 
-    } else { 
-      finalizeStroke(); 
+  document.getElementById('imageUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const img = new Image();
+    img.onload = () => addImageToCanvas(img);
+    img.src = URL.createObjectURL(file);
+  });
+  
+  // Simple image drag (select first image)
+  mainCanvas.addEventListener('mousedown', (e) => {
+    if(currentTool !== 'draw') return;
+    const pos = getCanvasCoords(e);
+    // Check if clicking on any image
+    for(let i=images.length-1; i>=0; i--) {
+      const img = images[i];
+      if(pos.x >= img.x && pos.x <= img.x+img.width && pos.y >= img.y && pos.y <= img.y+img.height) {
+        selectedImageIndex = i;
+        isDraggingImage = true;
+        dragStart = {x: pos.x - img.x, y: pos.y - img.y};
+        e.preventDefault();
+        return;
+      }
     }
-    isDrawing = false;
-  }
+    selectedImageIndex = -1;
+    startDraw(e);
+  });
   
-  // Mouse events
-  mainCanvas.addEventListener('mousedown', startDraw);
-  window.addEventListener('mousemove', drawMove);
-  window.addEventListener('mouseup', endDraw);
-  
-  // Touch events with pinch zoom
-  mainCanvas.addEventListener('touchstart', (e) => { 
-    e.preventDefault(); 
-    if(e.touches.length === 1) startDraw(e); 
-    else if(e.touches.length === 2) { 
-      pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      const rect = mainCanvas.getBoundingClientRect();
-      pinchMid = {
-        x: ((e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left) * (mainCanvas.width/rect.width),
-        y: ((e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top) * (mainCanvas.height/rect.height)
-      };
-      isDrawing = false; 
+  window.addEventListener('mousemove', (e) => {
+    if(isDraggingImage && selectedImageIndex >= 0) {
+      const pos = getCanvasCoords(e);
+      images[selectedImageIndex].x = pos.x - dragStart.x;
+      images[selectedImageIndex].y = pos.y - dragStart.y;
+      drawAllImages();
+      e.preventDefault();
+    } else if(isDrawing) {
+      drawMove(e);
     }
   });
   
-  mainCanvas.addEventListener('touchmove', (e) => { 
-    e.preventDefault(); 
-    if(e.touches.length === 1) drawMove(e); 
-    else if(e.touches.length === 2) { 
+  window.addEventListener('mouseup', (e) => {
+    if(isDraggingImage) {
+      isDraggingImage = false;
+      saveHistory();
+    }
+    if(isDrawing) endDraw(e);
+  });
+  
+  // Touch drag for images
+  mainCanvas.addEventListener('touchstart', (e) => {
+    if(e.touches.length === 1) {
+      const pos = getCanvasCoords(e);
+      for(let i=images.length-1; i>=0; i--) {
+        const img = images[i];
+        if(pos.x >= img.x && pos.x <= img.x+img.width && pos.y >= img.y && pos.y <= img.y+img.height) {
+          selectedImageIndex = i;
+          isDraggingImage = true;
+          dragStart = {x: pos.x - img.x, y: pos.y - img.y};
+          e.preventDefault();
+          return;
+        }
+      }
+      selectedImageIndex = -1;
+      startDraw(e);
+    }
+  });
+  
+  mainCanvas.addEventListener('touchmove', (e) => {
+    if(isDraggingImage && selectedImageIndex >= 0 && e.touches.length === 1) {
+      const pos = getCanvasCoords(e);
+      images[selectedImageIndex].x = pos.x - dragStart.x;
+      images[selectedImageIndex].y = pos.y - dragStart.y;
+      drawAllImages();
+      e.preventDefault();
+    } else if(isDrawing && e.touches.length === 1) {
+      drawMove(e);
+    } else if(e.touches.length === 2 && !isDrawing && !isDraggingImage) {
+      // Pinch zoom
       const newDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       const rect = mainCanvas.getBoundingClientRect();
       const newMid = {
@@ -604,12 +716,17 @@
       }
       pinchDist = newDist;
       pinchMid = newMid;
+      e.preventDefault();
     }
   });
   
-  mainCanvas.addEventListener('touchend', (e) => { 
-    if(e.touches.length < 2) pinchDist = 0; 
-    if(e.touches.length === 0 && isDrawing) endDraw(e); 
+  mainCanvas.addEventListener('touchend', (e) => {
+    if(isDraggingImage) {
+      isDraggingImage = false;
+      saveHistory();
+    }
+    if(e.touches.length < 2) pinchDist = 0;
+    if(e.touches.length === 0 && isDrawing) endDraw(e);
   });
   
   // ========== UI BUTTONS ==========
@@ -626,6 +743,7 @@
       mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); 
       topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); 
       currentStrokes = []; 
+      images = [];
       saveHistory(); 
       redrawAll(); 
     } 
@@ -636,14 +754,6 @@
   document.getElementById('brushWidth').addEventListener('input', (e) => { penSize = parseInt(e.target.value); document.getElementById('sizeLabel').innerText = penSize+'px'; });
   
   // ========== TELEGRAM & RECORDING ==========
-  function showToast(msg, isError=false) {
-    const toast = document.getElementById('micStatusToast');
-    toast.textContent = msg;
-    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
-    toast.style.display = 'block';
-    setTimeout(() => toast.style.display = 'none', 3000);
-  }
-  
   async function testTelegram() { 
     try { 
       const r = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/getMe`); 
