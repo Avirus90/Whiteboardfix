@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Ultimate Whiteboard | PDF + MCQ + Images + LaTeX</title>
+  <title>Slide-Based MCQ Whiteboard | PDF + Images + Drawing + Telegram</title>
   <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
-      startup: { pageReady: () => { if(window.renderLatexOnCanvas) window.renderLatexOnCanvas(); } }
+      startup: { pageReady: () => { if(window.refreshMathJax) window.refreshMathJax(); } }
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -18,7 +18,7 @@
     * { box-sizing: border-box; user-select: none; }
     body {
       margin: 0;
-      font-family: 'Segoe UI', 'Arial', sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background: #eef2f7;
       height: 100vh;
       display: flex;
@@ -64,10 +64,9 @@
     button:hover, .file-label:hover { filter: brightness(0.92); transform: scale(0.96); }
     button.secondary { background: #e2e6ea; color: #1e2a3e; }
     button.active { background: #2c3e66; }
-    button.adj-active { background: #f39c12; }
+    button.success { background: #2ecc71; }
     .telegram-btn { background: #0088cc; }
     .danger-btn { background: #e74c3c; }
-    .success-btn { background: #2ecc71; }
     input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; }
     .board-container {
       display: flex;
@@ -121,6 +120,39 @@
       font-size: 10px;
       pointer-events: none;
     }
+    .slide-panel {
+      background: #2c3e66;
+      border-radius: 40px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .slide-nav {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .slide-thumbnails {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      max-width: 400px;
+      padding: 4px;
+    }
+    .slide-thumb {
+      background: #ecf0f1;
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .slide-thumb.active {
+      background: #f39c12;
+      color: white;
+    }
     .recording-indicator {
       position: fixed;
       top: 15px;
@@ -137,13 +169,7 @@
     }
     @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
     .mic-status { position: fixed; bottom: 15px; left: 15px; background: #27ae60; color: white; padding: 5px 12px; border-radius: 30px; font-size: 11px; display: none; z-index: 1500; }
-    .image-edit-panel {
-      background: #2c3e66;
-      padding: 4px 12px;
-      border-radius: 30px;
-      display: inline-flex;
-      gap: 6px;
-    }
+    .image-edit-panel { background: #2c3e66; padding: 4px 12px; border-radius: 30px; display: inline-flex; gap: 6px; }
   </style>
 </head>
 <body>
@@ -168,13 +194,12 @@
   <div class="tool-group">
     <input type="file" id="pdfUpload" accept=".pdf" style="display:none">
     <label for="pdfUpload" class="file-label">📄 PDF</label>
-    <input type="file" id="quizUpload" accept=".txt,.quiz" style="display:none">
-    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 MCQ/TXT</label>
+    <input type="file" id="quizUpload" accept=".txt" style="display:none">
+    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 Slides (|Q| format)</label>
     <input type="file" id="imageUpload" accept="image/*" style="display:none">
     <label for="imageUpload" class="file-label" style="background:#16a085;">🖼️ Add Image</label>
     <input type="file" id="zipUpload" accept=".zip" style="display:none">
     <label for="zipUpload" class="file-label" style="background:#8e44ad;">📦 ZIP Images</label>
-    <button id="addQuizToCanvasBtn" class="success-btn">📋 Draw MCQ on Canvas</button>
   </div>
   <div class="image-edit-panel" id="imageEditTools" style="display:none;">
     <button id="scaleUpBtn" style="background:#2ecc71;">🔍 +</button>
@@ -189,9 +214,20 @@
   </div>
 </div>
 
+<!-- Slide Navigator Panel -->
+<div class="slide-panel" id="slidePanel" style="display:none;">
+  <span style="color:white;">📽️ Slides:</span>
+  <div class="slide-nav">
+    <button id="prevSlideBtn" class="secondary" style="background:#f39c12;">◀ Prev</button>
+    <span id="slideCounter" style="color:white; font-weight:bold;">1/1</span>
+    <button id="nextSlideBtn" class="secondary" style="background:#f39c12;">Next ▶</button>
+  </div>
+  <div id="slideThumbnails" class="slide-thumbnails"></div>
+</div>
+
 <div class="board-container">
   <div class="board-card">
-    <div class="board-header">📄 TOP: Fixed View (PDF/MCQ/Images + Drawing)</div>
+    <div class="board-header">📄 TOP: Fixed View (PDF/Slides/Images + Drawing)</div>
     <div class="canvas-holder" id="topHolder">
       <canvas id="topCanvas"></canvas>
       <div class="status-badge" id="topStatus">Fixed View</div>
@@ -232,7 +268,10 @@
   let scale = 1, offsetX = 0, offsetY = 0;
   let images = [];
   let selectedImageIndex = -1;
-  let parsedQuestions = []; // store parsed MCQs
+  
+  // Slide data
+  let slides = [];
+  let currentSlideIndex = 0;
   
   // Drawing events
   let isDrawing = false, lastPoint = {x:0,y:0}, isTap = false;
@@ -396,90 +435,92 @@
     reader.readAsArrayBuffer(file);
   });
   
-  // ========== MCQ PARSER (Clean) ==========
-  function parseMCQ(content) {
-    const lines = content.split(/\r?\n/);
-    const questions = [];
-    let current = null;
-    let readingOptions = false;
+  // ========== SLIDE PARSER (|Q| format with ### separator) ==========
+  function parseSlides(content) {
+    const rawSlides = content.split(/###/g);
+    const slidesData = [];
     
-    for(let line of lines) {
-      line = line.trim();
-      if(!line) continue;
+    for(let slideContent of rawSlides) {
+      if(!slideContent.trim()) continue;
       
-      // Match question number: "1.", "1)", "Q1.", "Q1"
-      const qMatch = line.match(/^(?:Q)?(\d+)[\.\)]\s*(.*)/i);
-      if(qMatch) {
-        if(current) questions.push(current);
-        current = { num: parseInt(qMatch[1]), text: qMatch[2], options: [], answer: '' };
-        readingOptions = true;
-        continue;
+      const lines = slideContent.split(/\r?\n/);
+      let slide = { q: '', a: '', b: '', c: '', d: '', ans: '' };
+      
+      for(let line of lines) {
+        line = line.trim();
+        if(line.startsWith('|Q|')) slide.q = line.substring(3).trim();
+        else if(line.startsWith('|A|')) slide.a = line.substring(3).trim();
+        else if(line.startsWith('|B|')) slide.b = line.substring(3).trim();
+        else if(line.startsWith('|C|')) slide.c = line.substring(3).trim();
+        else if(line.startsWith('|D|')) slide.d = line.substring(3).trim();
+        else if(line.startsWith('|ANS|')) slide.ans = line.substring(5).trim();
       }
       
-      // Match options: "A) text", "A. text", "A : text"
-      const optMatch = line.match(/^([A-D])[\.\)\:]\s*(.*)/i);
-      if(optMatch && current && readingOptions) {
-        current.options.push({ letter: optMatch[1], text: optMatch[2] });
-        continue;
-      }
-      
-      // Match answer: "Ans: C", "Answer: B", "Correct: A"
-      const ansMatch = line.match(/^(?:Ans|Answer|Correct)[\s:]*([A-D])/i);
-      if(ansMatch && current) {
-        current.answer = ansMatch[1].toUpperCase();
-        continue;
-      }
-      
-      // If we have a current question and no pattern matches, it might be continuation of question text
-      if(current && !optMatch && !ansMatch && !qMatch) {
-        current.text += ' ' + line;
-      }
+      if(slide.q) slidesData.push(slide);
     }
-    if(current) questions.push(current);
-    return questions;
+    return slidesData;
   }
   
-  // Draw MCQs on Canvas with LaTeX support
-  window.renderLatexOnCanvas = function() {
-    if(!parsedQuestions.length) return;
+  function drawSlideOnCanvas(slide, index) {
+    // Clear drawing layers for new slide (keep strokes separate per slide)
+    mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height);
+    topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height);
+    currentStrokes = [];
     
-    let yPos = 50;
-    const lineHeight = 28;
-    const fontSize = 16;
+    let yPos = 80;
+    const lineHeight = 32;
+    const fontSize = 18;
     
-    for(let q of parsedQuestions) {
-      const qText = `Q${q.num}. ${q.text}`;
-      [mainDrawCtx, topDrawCtx].forEach(ctx => {
-        ctx.font = `bold ${fontSize}px "Segoe UI"`;
-        ctx.fillStyle = '#2c3e66';
-        ctx.fillText(qText, 50, yPos);
-        yPos += lineHeight;
-        
-        q.options.forEach(opt => {
-          ctx.font = `${fontSize-2}px "Segoe UI"`;
-          ctx.fillStyle = '#34495e';
-          ctx.fillText(`${opt.letter}) ${opt.text}`, 70, yPos);
-          yPos += lineHeight;
-        });
-        
-        if(q.answer) {
-          ctx.font = `italic ${fontSize-2}px "Segoe UI"`;
-          ctx.fillStyle = '#27ae60';
-          ctx.fillText(`✓ Answer: ${q.answer}`, 70, yPos);
-          yPos += lineHeight + 5;
-        }
-      });
-      yPos += 10;
-    }
+    // Draw Question
+    [mainDrawCtx, topDrawCtx].forEach(ctx => {
+      ctx.font = `bold ${fontSize+2}px "Segoe UI"`;
+      ctx.fillStyle = '#1a5276';
+      ctx.fillText(`Q${index+1}. ${slide.q}`, 50, yPos);
+      yPos += lineHeight + 5;
+      
+      ctx.font = `${fontSize}px "Segoe UI"`;
+      ctx.fillStyle = '#2c3e66';
+      if(slide.a) ctx.fillText(`A) ${slide.a}`, 70, yPos);
+      yPos += lineHeight;
+      if(slide.b) ctx.fillText(`B) ${slide.b}`, 70, yPos);
+      yPos += lineHeight;
+      if(slide.c) ctx.fillText(`C) ${slide.c}`, 70, yPos);
+      yPos += lineHeight;
+      if(slide.d) ctx.fillText(`D) ${slide.d}`, 70, yPos);
+      yPos += lineHeight + 5;
+      
+      if(slide.ans) {
+        ctx.font = `italic ${fontSize-1}px "Segoe UI"`;
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText(`✓ Answer: ${slide.ans}`, 70, yPos);
+      }
+    });
+    
     redrawAll();
     saveHistory();
-    showToast(`${parsedQuestions.length} MCQs drawn on canvas!`);
     
-    // Re-trigger MathJax for any LaTeX
+    // Trigger MathJax for LaTeX
     if(window.MathJax) {
       MathJax.typesetPromise();
     }
-  };
+  }
+  
+  function updateSlideDisplay() {
+    if(!slides.length) return;
+    drawSlideOnCanvas(slides[currentSlideIndex], currentSlideIndex);
+    document.getElementById('slideCounter').innerHTML = `${currentSlideIndex+1}/${slides.length}`;
+    
+    // Update thumbnails
+    const container = document.getElementById('slideThumbnails');
+    container.innerHTML = '';
+    slides.forEach((slide, idx) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'slide-thumb' + (idx === currentSlideIndex ? ' active' : '');
+      thumb.textContent = `Slide ${idx+1}`;
+      thumb.onclick = () => { currentSlideIndex = idx; updateSlideDisplay(); };
+      container.appendChild(thumb);
+    });
+  }
   
   document.getElementById('quizUpload').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -487,24 +528,35 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target.result;
-      parsedQuestions = parseMCQ(content);
-      showToast(`${parsedQuestions.length} questions parsed! Click "Draw MCQ on Canvas"`);
-      console.log('Parsed:', parsedQuestions);
+      slides = parseSlides(content);
+      if(slides.length) {
+        currentSlideIndex = 0;
+        updateSlideDisplay();
+        document.getElementById('slidePanel').style.display = 'flex';
+        showToast(`${slides.length} slides loaded! Use navigator to switch.`);
+      } else {
+        showToast('No valid slides found! Use |Q| format with ### separator', true);
+      }
     };
     reader.readAsText(file);
   });
   
-  document.getElementById('addQuizToCanvasBtn').onclick = () => {
-    if(!parsedQuestions.length) {
-      showToast('Please upload MCQ file first!', true);
-      return;
+  document.getElementById('prevSlideBtn').onclick = () => {
+    if(slides.length && currentSlideIndex > 0) {
+      currentSlideIndex--;
+      updateSlideDisplay();
     }
-    renderLatexOnCanvas();
+  };
+  document.getElementById('nextSlideBtn').onclick = () => {
+    if(slides.length && currentSlideIndex < slides.length-1) {
+      currentSlideIndex++;
+      updateSlideDisplay();
+    }
   };
   
-  // ========== IMAGES (Single + ZIP) ==========
+  // ========== IMAGES ==========
   function drawAllImages() {
-    images.forEach((imgData, idx) => {
+    images.forEach((imgData) => {
       [mainDrawCtx, topDrawCtx].forEach(ctx => {
         ctx.save();
         ctx.translate(imgData.x + imgData.width/2, imgData.y + imgData.height/2);
@@ -524,7 +576,7 @@
     document.getElementById('imageEditTools').style.display = 'flex';
     selectedImageIndex = images.length-1;
     saveHistory();
-    showToast('Image added! Use tools to resize/rotate/flip');
+    showToast('Image added!');
   }
   
   document.getElementById('imageUpload').addEventListener('change', (e) => {
@@ -540,21 +592,18 @@
     if(!file) return;
     const JSZip = window.JSZip;
     const zip = await JSZip.loadAsync(file);
-    const imagesList = [];
     for(let [filename, zipEntry] of Object.entries(zip.files)) {
       if(/\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) {
         const blob = await zipEntry.async('blob');
         const url = URL.createObjectURL(blob);
         const img = new Image();
         await new Promise((resolve) => { img.onload = resolve; img.src = url; });
-        imagesList.push(img);
+        addImageToCanvas(img);
       }
     }
-    for(let img of imagesList) addImageToCanvas(img);
-    showToast(`${imagesList.length} images added from ZIP!`);
+    showToast('Images added from ZIP!');
   });
   
-  // Image transform tools
   document.getElementById('scaleUpBtn').onclick = () => {
     if(selectedImageIndex>=0) { images[selectedImageIndex].width *= 1.1; images[selectedImageIndex].height *= 1.1; drawAllImages(); saveHistory(); }
   };
@@ -602,7 +651,7 @@
   document.getElementById('eraserBtn').onclick = () => { currentTool='eraser'; highlight('eraserBtn'); };
   document.getElementById('smartEraseBtn').onclick = () => { currentTool='smartErase'; highlight('smartEraseBtn'); };
   function highlight(id) { ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(i=>document.getElementById(i).classList.remove('active')); document.getElementById(id).classList.add('active'); }
-  document.getElementById('clearAllBtn').onclick = () => { if(confirm('Clear all?')) { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); currentStrokes=[]; images=[]; parsedQuestions=[]; saveHistory(); redrawAll(); } };
+  document.getElementById('clearAllBtn').onclick = () => { if(confirm('Clear all drawings?')) { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); currentStrokes=[]; saveHistory(); redrawAll(); } };
   document.getElementById('undoBtn').onclick = undo;
   document.getElementById('redoBtn').onclick = redo;
   document.getElementById('penColor').addEventListener('input', (e) => penColor = e.target.value);
@@ -639,7 +688,6 @@
   document.getElementById('recordBtn').onclick = startRecording;
   document.getElementById('testTelegramBtn').onclick = testTelegram;
   
-  // Add mic button if not exists
   if(!document.getElementById('toggleMicBtn')) {
     const micBtn = document.createElement('button');
     micBtn.id = 'toggleMicBtn';
