@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Ultimate Whiteboard | PDF + MCQ + Images + LaTeX</title>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
+      startup: { pageReady: () => { if(window.renderLatexOnCanvas) window.renderLatexOnCanvas(); } }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    * { box-sizing: border-box; user-select: none; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', 'Arial', sans-serif;
+      background: #eef2f7;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .toolbar {
+      background: white;
+      border-radius: 16px;
+      padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      flex-shrink: 0;
+    }
+    .tool-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      background: #f8f9fc;
+      padding: 4px 10px;
+      border-radius: 30px;
+    }
+    button, .file-label {
+      background: #1e88e5;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 30px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+      transition: 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    button:hover, .file-label:hover { filter: brightness(0.92); transform: scale(0.96); }
+    button.secondary { background: #e2e6ea; color: #1e2a3e; }
+    button.active { background: #2c3e66; }
+    button.adj-active { background: #f39c12; }
+    .telegram-btn { background: #0088cc; }
+    .danger-btn { background: #e74c3c; }
+    .success-btn { background: #2ecc71; }
+    input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; }
+    .board-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      gap: 10px;
+      min-height: 0;
+    }
+    .board-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex: 1;
+    }
+    .board-header {
+      padding: 6px 12px;
+      background: #fef9e6;
+      font-weight: bold;
+      border-bottom: 2px solid #ffd966;
+      font-size: 12px;
+    }
+    .canvas-holder {
+      position: relative;
+      flex: 1;
+      background: #f0f2f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    canvas {
+      display: block;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      background: white;
+      cursor: crosshair;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .status-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      background: rgba(0,0,0,0.65);
+      color: white;
+      padding: 3px 10px;
+      border-radius: 30px;
+      font-size: 10px;
+      pointer-events: none;
+    }
+    .recording-indicator {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      background: #e74c3c;
+      color: white;
+      padding: 5px 15px;
+      border-radius: 30px;
+      font-weight: bold;
+      animation: pulse 1s infinite;
+      display: none;
+      z-index: 1500;
+      font-size: 12px;
+    }
+    @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
+    .mic-status { position: fixed; bottom: 15px; left: 15px; background: #27ae60; color: white; padding: 5px 12px; border-radius: 30px; font-size: 11px; display: none; z-index: 1500; }
+    .image-edit-panel {
+      background: #2c3e66;
+      padding: 4px 12px;
+      border-radius: 30px;
+      display: inline-flex;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
+<div id="micStatusToast" class="mic-status"></div>
+
+<div class="toolbar">
+  <div class="tool-group">
+    <input type="color" id="penColor" value="#000000">
+    <input type="range" id="brushWidth" min="1" max="40" value="3">
+    <span id="sizeLabel">3px</span>
+  </div>
+  <div class="tool-group">
+    <button id="drawModeBtn" class="active">✏️ Draw</button>
+    <button id="eraserBtn">🧽 Eraser</button>
+    <button id="smartEraseBtn">🎯 Smart Erase</button>
+    <button id="clearAllBtn" class="secondary">🗑️ Clear</button>
+    <button id="undoBtn" class="secondary">↩️ Undo</button>
+    <button id="redoBtn" class="secondary">↪️ Redo</button>
+  </div>
+  <div class="tool-group">
+    <input type="file" id="pdfUpload" accept=".pdf" style="display:none">
+    <label for="pdfUpload" class="file-label">📄 PDF</label>
+    <input type="file" id="quizUpload" accept=".txt,.quiz" style="display:none">
+    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 MCQ/TXT</label>
+    <input type="file" id="imageUpload" accept="image/*" style="display:none">
+    <label for="imageUpload" class="file-label" style="background:#16a085;">🖼️ Add Image</label>
+    <input type="file" id="zipUpload" accept=".zip" style="display:none">
+    <label for="zipUpload" class="file-label" style="background:#8e44ad;">📦 ZIP Images</label>
+    <button id="addQuizToCanvasBtn" class="success-btn">📋 Draw MCQ on Canvas</button>
+  </div>
+  <div class="image-edit-panel" id="imageEditTools" style="display:none;">
+    <button id="scaleUpBtn" style="background:#2ecc71;">🔍 +</button>
+    <button id="scaleDownBtn" style="background:#e67e22;">🔍 -</button>
+    <button id="rotateBtn" style="background:#3498db;">🔄</button>
+    <button id="flipHBtn" style="background:#9b59b6;">↔️ Flip</button>
+    <button id="deleteImageBtn" style="background:#e74c3c;">❌</button>
+  </div>
+  <div class="tool-group">
+    <button id="recordBtn" class="danger-btn">🔴 Record + Telegram</button>
+    <button id="testTelegramBtn" class="telegram-btn">🤖 Test Bot</button>
+  </div>
+</div>
+
+<div class="board-container">
+  <div class="board-card">
+    <div class="board-header">📄 TOP: Fixed View (PDF/MCQ/Images + Drawing)</div>
+    <div class="canvas-holder" id="topHolder">
+      <canvas id="topCanvas"></canvas>
+      <div class="status-badge" id="topStatus">Fixed View</div>
+    </div>
+  </div>
+  <div class="board-card">
+    <div class="board-header">✍️ BOTTOM: Zoomable Canvas (Pinch 0.2x–12x • Pan • Draw)</div>
+    <div class="canvas-holder" id="mainHolder">
+      <canvas id="mainCanvas"></canvas>
+      <div class="status-badge" id="mainStatus">Zoom + Draw</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ========== TELEGRAM ==========
+  const TELEGRAM = { BOT_TOKEN: '8142735342:AAHexGW7ZVeWorAb70i51P1hudv9rljUH7Q', CHAT_ID: '5229323108' };
+  
+  // ========== GLOBALS ==========
+  const topCanvas = document.getElementById('topCanvas');
+  const mainCanvas = document.getElementById('mainCanvas');
+  let topCtx = topCanvas.getContext('2d');
+  let mainCtx = mainCanvas.getContext('2d');
+  
+  let pdfOffscreen = document.createElement('canvas');
+  let pdfOffCtx = pdfOffscreen.getContext('2d');
+  let drawingLayerMain = document.createElement('canvas');
+  let drawingLayerTop = document.createElement('canvas');
+  let mainDrawCtx = drawingLayerMain.getContext('2d');
+  let topDrawCtx = drawingLayerTop.getContext('2d');
+  
+  let currentStrokes = [];
+  let currentStrokePoints = [];
+  let historyStack = []; let historyIndex = -1;
+  let currentTool = 'draw';
+  let penColor = '#000000';
+  let penSize = 3;
+  let scale = 1, offsetX = 0, offsetY = 0;
+  let images = [];
+  let selectedImageIndex = -1;
+  let parsedQuestions = []; // store parsed MCQs
+  
+  // Drawing events
+  let isDrawing = false, lastPoint = {x:0,y:0}, isTap = false;
+  let pinchDist = 0, pinchMid = {x:0,y:0};
+  
+  // Recording
+  let mediaRecorder = null, recordedChunks = [], isRecording = false;
+  let recordingInterval = null;
+  let micStream = null, isMicEnabled = false;
+  const hiddenRecordCanvas = document.createElement('canvas');
+  let hiddenRecordCtx = hiddenRecordCanvas.getContext('2d');
+  
+  // ========== UTILITIES ==========
+  function showToast(msg, isError=false) {
+    const toast = document.getElementById('micStatusToast');
+    toast.textContent = msg;
+    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 3000);
+  }
+  
+  function setCanvasSize(w, h) {
+    topCanvas.width = w; topCanvas.height = h;
+    mainCanvas.width = w; mainCanvas.height = h;
+    drawingLayerMain.width = w; drawingLayerMain.height = h;
+    drawingLayerTop.width = w; drawingLayerTop.height = h;
+    pdfOffscreen.width = w; pdfOffscreen.height = h;
+    hiddenRecordCanvas.width = w; hiddenRecordCanvas.height = h;
+    redrawAll();
+  }
+  
+  function redrawAll() {
+    mainCtx.setTransform(1,0,0,1,0,0);
+    mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height);
+    mainCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
+    if(pdfOffscreen.width) mainCtx.drawImage(pdfOffscreen,0,0);
+    mainCtx.drawImage(drawingLayerMain,0,0);
+    
+    topCtx.setTransform(1,0,0,1,0,0);
+    topCtx.clearRect(0,0, topCanvas.width, topCanvas.height);
+    topCtx.drawImage(pdfOffscreen,0,0);
+    topCtx.drawImage(drawingLayerTop,0,0);
+    
+    document.getElementById('mainStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x`;
+  }
+  
+  function getCanvasCoords(e, canvasRef = mainCanvas) {
+    const rect = canvasRef.getBoundingClientRect();
+    const clientX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const clientY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const canvasW = canvasRef.width, canvasH = canvasRef.height;
+    const cssW = rect.width, cssH = rect.height;
+    let canvasX = (clientX / cssW) * canvasW;
+    let canvasY = (clientY / cssH) * canvasH;
+    if(canvasRef === mainCanvas) {
+      canvasX = (canvasX - offsetX) / scale;
+      canvasY = (canvasY - offsetY) / scale;
+    }
+    return { x: Math.max(0, Math.min(canvasX, canvasW)), y: Math.max(0, Math.min(canvasY, canvasH)) };
+  }
+  
+  function saveHistory() {
+    const state = {
+      mainImg: drawingLayerMain.toDataURL(),
+      topImg: drawingLayerTop.toDataURL(),
+      strokes: JSON.parse(JSON.stringify(currentStrokes))
+    };
+    if(historyIndex < historyStack.length-1) historyStack = historyStack.slice(0, historyIndex+1);
+    historyStack.push(state);
+    historyIndex = historyStack.length-1;
+    if(historyStack.length > 50) { historyStack.shift(); historyIndex--; }
+    updateUndoRedo();
+  }
+  
+  function restoreFromHistory(state) {
+    const mainImg = new Image(); mainImg.onload = () => { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); mainDrawCtx.drawImage(mainImg,0,0); redrawAll(); };
+    mainImg.src = state.mainImg;
+    const topImg = new Image(); topImg.onload = () => { topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); topDrawCtx.drawImage(topImg,0,0); redrawAll(); };
+    topImg.src = state.topImg;
+    currentStrokes = state.strokes || [];
+  }
+  
+  function undo() { if(historyIndex>0) { historyIndex--; restoreFromHistory(historyStack[historyIndex]); } updateUndoRedo(); }
+  function redo() { if(historyIndex<historyStack.length-1) { historyIndex++; restoreFromHistory(historyStack[historyIndex]); } updateUndoRedo(); }
+  function updateUndoRedo() { document.getElementById('undoBtn').disabled = historyIndex<=0; document.getElementById('redoBtn').disabled = historyIndex>=historyStack.length-1; }
+  
+  function drawStroke(from, to, isDot=false) {
+    if(currentTool === 'draw') {
+      mainDrawCtx.strokeStyle = penColor; mainDrawCtx.lineWidth = penSize; mainDrawCtx.lineCap='round';
+      topDrawCtx.strokeStyle = penColor; topDrawCtx.lineWidth = penSize; topDrawCtx.lineCap='round';
+      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x,from.y); mainDrawCtx.lineTo(to.x,to.y); mainDrawCtx.stroke();
+      topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x,from.y); topDrawCtx.lineTo(to.x,to.y); topDrawCtx.stroke();
+      if(isDot) {
+        mainDrawCtx.fillStyle = penColor; topDrawCtx.fillStyle = penColor;
+        mainDrawCtx.beginPath(); mainDrawCtx.arc(to.x,to.y,penSize/2,0,Math.PI*2); mainDrawCtx.fill();
+        topDrawCtx.beginPath(); topDrawCtx.arc(to.x,to.y,penSize/2,0,Math.PI*2); topDrawCtx.fill();
+      }
+    } else if(currentTool === 'eraser') {
+      mainDrawCtx.globalCompositeOperation = 'destination-out'; topDrawCtx.globalCompositeOperation = 'destination-out';
+      mainDrawCtx.lineWidth = penSize*2; topDrawCtx.lineWidth = penSize*2;
+      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x,from.y); mainDrawCtx.lineTo(to.x,to.y); mainDrawCtx.stroke();
+      topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x,from.y); topDrawCtx.lineTo(to.x,to.y); topDrawCtx.stroke();
+      mainDrawCtx.globalCompositeOperation = 'source-over'; topDrawCtx.globalCompositeOperation = 'source-over';
+    } else if(currentTool === 'smartErase') {
+      const tolerance = penSize * 2;
+      let removed = false;
+      currentStrokes = currentStrokes.filter(stroke => {
+        for(let p of stroke.points) {
+          if(Math.hypot(p.x - to.x, p.y - to.y) < tolerance) { removed = true; return false; }
+        }
+        return true;
+      });
+      if(removed) {
+        redrawAllStrokes();
+        saveHistory();
+      }
+    }
+    redrawAll();
+  }
+  
+  function redrawAllStrokes() {
+    mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height);
+    topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height);
+    currentStrokes.forEach(s => {
+      mainDrawCtx.strokeStyle = s.color; mainDrawCtx.lineWidth = s.width;
+      topDrawCtx.strokeStyle = s.color; topDrawCtx.lineWidth = s.width;
+      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(s.points[0].x, s.points[0].y);
+      topDrawCtx.beginPath(); topDrawCtx.moveTo(s.points[0].x, s.points[0].y);
+      for(let i=1;i<s.points.length;i++) {
+        mainDrawCtx.lineTo(s.points[i].x, s.points[i].y);
+        topDrawCtx.lineTo(s.points[i].x, s.points[i].y);
+      }
+      mainDrawCtx.stroke(); topDrawCtx.stroke();
+    });
+    redrawAll();
+  }
+  
+  function finalizeStroke() {
+    if(currentStrokePoints.length === 0) return;
+    currentStrokes.push({ points: [...currentStrokePoints], color: penColor, width: penSize, isDot: currentStrokePoints.length===1 });
+    saveHistory();
+    currentStrokePoints = [];
+  }
+  
+  // ========== PDF ==========
+  document.getElementById('pdfUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const pdfData = new Uint8Array(ev.target.result);
+      const pdfDoc = await pdfjsLib.getDocument(pdfData).promise;
+      const page = await pdfDoc.getPage(1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      setCanvasSize(viewport.width, viewport.height);
+      pdfOffCtx.fillStyle = 'white'; pdfOffCtx.fillRect(0,0,viewport.width,viewport.height);
+      await page.render({ canvasContext: pdfOffCtx, viewport }).promise;
+      redrawAll();
+      showToast('PDF loaded!');
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  
+  // ========== MCQ PARSER (Clean) ==========
+  function parseMCQ(content) {
+    const lines = content.split(/\r?\n/);
+    const questions = [];
+    let current = null;
+    let readingOptions = false;
+    
+    for(let line of lines) {
+      line = line.trim();
+      if(!line) continue;
+      
+      // Match question number: "1.", "1)", "Q1.", "Q1"
+      const qMatch = line.match(/^(?:Q)?(\d+)[\.\)]\s*(.*)/i);
+      if(qMatch) {
+        if(current) questions.push(current);
+        current = { num: parseInt(qMatch[1]), text: qMatch[2], options: [], answer: '' };
+        readingOptions = true;
+        continue;
+      }
+      
+      // Match options: "A) text", "A. text", "A : text"
+      const optMatch = line.match(/^([A-D])[\.\)\:]\s*(.*)/i);
+      if(optMatch && current && readingOptions) {
+        current.options.push({ letter: optMatch[1], text: optMatch[2] });
+        continue;
+      }
+      
+      // Match answer: "Ans: C", "Answer: B", "Correct: A"
+      const ansMatch = line.match(/^(?:Ans|Answer|Correct)[\s:]*([A-D])/i);
+      if(ansMatch && current) {
+        current.answer = ansMatch[1].toUpperCase();
+        continue;
+      }
+      
+      // If we have a current question and no pattern matches, it might be continuation of question text
+      if(current && !optMatch && !ansMatch && !qMatch) {
+        current.text += ' ' + line;
+      }
+    }
+    if(current) questions.push(current);
+    return questions;
+  }
+  
+  // Draw MCQs on Canvas with LaTeX support
+  window.renderLatexOnCanvas = function() {
+    if(!parsedQuestions.length) return;
+    
+    let yPos = 50;
+    const lineHeight = 28;
+    const fontSize = 16;
+    
+    for(let q of parsedQuestions) {
+      const qText = `Q${q.num}. ${q.text}`;
+      [mainDrawCtx, topDrawCtx].forEach(ctx => {
+        ctx.font = `bold ${fontSize}px "Segoe UI"`;
+        ctx.fillStyle = '#2c3e66';
+        ctx.fillText(qText, 50, yPos);
+        yPos += lineHeight;
+        
+        q.options.forEach(opt => {
+          ctx.font = `${fontSize-2}px "Segoe UI"`;
+          ctx.fillStyle = '#34495e';
+          ctx.fillText(`${opt.letter}) ${opt.text}`, 70, yPos);
+          yPos += lineHeight;
+        });
+        
+        if(q.answer) {
+          ctx.font = `italic ${fontSize-2}px "Segoe UI"`;
+          ctx.fillStyle = '#27ae60';
+          ctx.fillText(`✓ Answer: ${q.answer}`, 70, yPos);
+          yPos += lineHeight + 5;
+        }
+      });
+      yPos += 10;
+    }
+    redrawAll();
+    saveHistory();
+    showToast(`${parsedQuestions.length} MCQs drawn on canvas!`);
+    
+    // Re-trigger MathJax for any LaTeX
+    if(window.MathJax) {
+      MathJax.typesetPromise();
+    }
+  };
+  
+  document.getElementById('quizUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target.result;
+      parsedQuestions = parseMCQ(content);
+      showToast(`${parsedQuestions.length} questions parsed! Click "Draw MCQ on Canvas"`);
+      console.log('Parsed:', parsedQuestions);
+    };
+    reader.readAsText(file);
+  });
+  
+  document.getElementById('addQuizToCanvasBtn').onclick = () => {
+    if(!parsedQuestions.length) {
+      showToast('Please upload MCQ file first!', true);
+      return;
+    }
+    renderLatexOnCanvas();
+  };
+  
+  // ========== IMAGES (Single + ZIP) ==========
+  function drawAllImages() {
+    images.forEach((imgData, idx) => {
+      [mainDrawCtx, topDrawCtx].forEach(ctx => {
+        ctx.save();
+        ctx.translate(imgData.x + imgData.width/2, imgData.y + imgData.height/2);
+        ctx.rotate(imgData.rotation * Math.PI/180);
+        ctx.scale(imgData.flipH ? -1 : 1, imgData.flipV ? -1 : 1);
+        ctx.drawImage(imgData.img, -imgData.width/2, -imgData.height/2, imgData.width, imgData.height);
+        ctx.restore();
+      });
+    });
+    redrawAll();
+  }
+  
+  function addImageToCanvas(imgElement) {
+    const imgWidth = 250, imgHeight = (imgElement.height/imgElement.width)*250;
+    images.push({ img: imgElement, x: 100, y: 100, width: imgWidth, height: imgHeight, rotation: 0, flipH: false, flipV: false });
+    drawAllImages();
+    document.getElementById('imageEditTools').style.display = 'flex';
+    selectedImageIndex = images.length-1;
+    saveHistory();
+    showToast('Image added! Use tools to resize/rotate/flip');
+  }
+  
+  document.getElementById('imageUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const img = new Image();
+    img.onload = () => addImageToCanvas(img);
+    img.src = URL.createObjectURL(file);
+  });
+  
+  document.getElementById('zipUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const JSZip = window.JSZip;
+    const zip = await JSZip.loadAsync(file);
+    const imagesList = [];
+    for(let [filename, zipEntry] of Object.entries(zip.files)) {
+      if(/\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) {
+        const blob = await zipEntry.async('blob');
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        await new Promise((resolve) => { img.onload = resolve; img.src = url; });
+        imagesList.push(img);
+      }
+    }
+    for(let img of imagesList) addImageToCanvas(img);
+    showToast(`${imagesList.length} images added from ZIP!`);
+  });
+  
+  // Image transform tools
+  document.getElementById('scaleUpBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images[selectedImageIndex].width *= 1.1; images[selectedImageIndex].height *= 1.1; drawAllImages(); saveHistory(); }
+  };
+  document.getElementById('scaleDownBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images[selectedImageIndex].width *= 0.9; images[selectedImageIndex].height *= 0.9; drawAllImages(); saveHistory(); }
+  };
+  document.getElementById('rotateBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images[selectedImageIndex].rotation = (images[selectedImageIndex].rotation + 90) % 360; drawAllImages(); saveHistory(); }
+  };
+  document.getElementById('flipHBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images[selectedImageIndex].flipH = !images[selectedImageIndex].flipH; drawAllImages(); saveHistory(); }
+  };
+  document.getElementById('deleteImageBtn').onclick = () => {
+    if(selectedImageIndex>=0) { images.splice(selectedImageIndex,1); selectedImageIndex = -1; drawAllImages(); saveHistory(); if(images.length===0) document.getElementById('imageEditTools').style.display = 'none'; }
+  };
+  
+  // ========== DRAWING HANDLERS ==========
+  function startDraw(e) { isDrawing=true; isTap=true; lastPoint = getCanvasCoords(e, mainCanvas); if(currentTool!=='smartErase') saveHistory(); currentStrokePoints=[]; }
+  function drawMove(e) {
+    if(!isDrawing) return;
+    const p = getCanvasCoords(e, mainCanvas);
+    if(isTap && Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y)<2) return;
+    isTap=false;
+    drawStroke(lastPoint, p, false);
+    currentStrokePoints.push({x:p.x, y:p.y});
+    lastPoint = p;
+  }
+  function endDraw(e) {
+    if(!isDrawing) return;
+    if(isTap) { const p = getCanvasCoords(e, mainCanvas); drawStroke(p, p, true); currentStrokePoints.push({x:p.x,y:p.y}); finalizeStroke(); }
+    else { finalizeStroke(); }
+    isDrawing=false;
+  }
+  mainCanvas.addEventListener('mousedown', startDraw);
+  window.addEventListener('mousemove', drawMove);
+  window.addEventListener('mouseup', endDraw);
+  mainCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); if(e.touches.length===1) startDraw(e); else if(e.touches.length===2) { pinchDist = getDistance(e.touches[0], e.touches[1]); pinchMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas); isDrawing=false; } });
+  mainCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); if(e.touches.length===1) drawMove(e); else if(e.touches.length===2) { const newDist = getDistance(e.touches[0], e.touches[1]); const newMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas); if(pinchDist) { const zoom = newDist/pinchDist; const worldX = (pinchMid.x - offsetX)/scale; const worldY = (pinchMid.y - offsetY)/scale; scale *= zoom; scale = Math.min(12, Math.max(0.2, scale)); offsetX = pinchMid.x - worldX*scale; offsetY = pinchMid.y - worldY*scale; offsetX += newMid.x - pinchMid.x; offsetY += newMid.y - pinchMid.y; redrawAll(); } pinchDist = newDist; pinchMid = newMid; } });
+  mainCanvas.addEventListener('touchend', (e) => { if(e.touches.length<2) pinchDist=0; if(e.touches.length===0 && isDrawing) endDraw(e); });
+  function getDistance(a,b) { return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
+  function getMidpoint(a,b, ref) { const rect = ref.getBoundingClientRect(); return { x: ((a.clientX+b.clientX)/2 - rect.left) * (ref.width/rect.width), y: ((a.clientY+b.clientY)/2 - rect.top) * (ref.height/rect.height) }; }
+  
+  // ========== UI BUTTONS ==========
+  document.getElementById('drawModeBtn').onclick = () => { currentTool='draw'; highlight('drawModeBtn'); };
+  document.getElementById('eraserBtn').onclick = () => { currentTool='eraser'; highlight('eraserBtn'); };
+  document.getElementById('smartEraseBtn').onclick = () => { currentTool='smartErase'; highlight('smartEraseBtn'); };
+  function highlight(id) { ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(i=>document.getElementById(i).classList.remove('active')); document.getElementById(id).classList.add('active'); }
+  document.getElementById('clearAllBtn').onclick = () => { if(confirm('Clear all?')) { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); currentStrokes=[]; images=[]; parsedQuestions=[]; saveHistory(); redrawAll(); } };
+  document.getElementById('undoBtn').onclick = undo;
+  document.getElementById('redoBtn').onclick = redo;
+  document.getElementById('penColor').addEventListener('input', (e) => penColor = e.target.value);
+  document.getElementById('brushWidth').addEventListener('input', (e) => { penSize = parseInt(e.target.value); document.getElementById('sizeLabel').innerText = penSize+'px'; });
+  
+  // ========== TELEGRAM & RECORDING ==========
+  async function testTelegram() { try { const r = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/getMe`); const j = await r.json(); showToast(j.ok ? 'Bot OK' : 'Failed', !j.ok); } catch(e) { showToast('Network error', true); } }
+  async function uploadToTelegram(blob, filename) {
+    const fd = new FormData(); fd.append('chat_id', TELEGRAM.CHAT_ID); fd.append('document', blob, filename);
+    try { const res = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/sendDocument`, { method: 'POST', body: fd }); return (await res.json()).ok; } catch(e) { return false; }
+  }
+  async function startRecording() {
+    if(isRecording) { if(mediaRecorder) mediaRecorder.stop(); if(recordingInterval) clearInterval(recordingInterval); isRecording=false; document.getElementById('recIndicator').style.display='none'; showToast('Recording saved'); return; }
+    let audioTracks = null;
+    if(isMicEnabled) { try { const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); audioTracks = audioStream.getAudioTracks(); } catch(e){} }
+    hiddenRecordCanvas.width = topCanvas.width; hiddenRecordCanvas.height = topCanvas.height;
+    const canvasStream = hiddenRecordCanvas.captureStream(20);
+    let finalStream = canvasStream;
+    if(audioTracks && audioTracks.length) finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' });
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = e => { if(e.data.size) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      await uploadToTelegram(blob, `whiteboard_${Date.now()}.webm`);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'recording.webm'; a.click();
+      if(recordingInterval) clearInterval(recordingInterval);
+    };
+    recordingInterval = setInterval(() => { hiddenRecordCtx.drawImage(topCanvas, 0, 0); }, 40);
+    mediaRecorder.start(500);
+    isRecording=true; document.getElementById('recIndicator').style.display='block';
+  }
+  async function enableMic() { try { if(micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream=null; isMicEnabled=false; showToast('Mic disabled'); return; } const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); micStream=stream; isMicEnabled=true; showToast('Mic ready'); } catch(e){ showToast('Mic denied',true); } }
+  document.getElementById('recordBtn').onclick = startRecording;
+  document.getElementById('testTelegramBtn').onclick = testTelegram;
+  
+  // Add mic button if not exists
+  if(!document.getElementById('toggleMicBtn')) {
+    const micBtn = document.createElement('button');
+    micBtn.id = 'toggleMicBtn';
+    micBtn.textContent = '🎙️ Enable Mic';
+    micBtn.className = 'telegram-btn';
+    micBtn.onclick = enableMic;
+    document.querySelector('.tool-group:last-child').appendChild(micBtn);
+  }
+  
+  setCanvasSize(1200, 675);
+  saveHistory();
+  testTelegram();
+</script>
+</body>
+</html>
