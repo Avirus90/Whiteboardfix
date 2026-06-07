@@ -3,54 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Slide-Based MCQ Whiteboard | Auto-Draw on Upload</title>
+  <title>Ultimate Whiteboard | PDF + MCQ Slides + Drawing on Top</title>
   <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true },
-      startup: { pageReady: () => { if(window.refreshMathJax) window.refreshMathJax(); } }
+      startup: { ready: true }
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
     * { box-sizing: border-box; user-select: none; }
     body {
       margin: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #eef2f7;
+      background: #1a1a2e;
       height: 100vh;
       display: flex;
       flex-direction: column;
-      padding: 8px;
-      gap: 8px;
+      padding: 10px;
+      gap: 10px;
       overflow: hidden;
     }
     .toolbar {
-      background: white;
-      border-radius: 16px;
-      padding: 8px 12px;
+      background: #16213e;
+      border-radius: 20px;
+      padding: 8px 15px;
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       flex-shrink: 0;
     }
     .tool-group {
       display: flex;
-      gap: 6px;
+      gap: 8px;
       flex-wrap: wrap;
       align-items: center;
-      background: #f8f9fc;
-      padding: 4px 10px;
-      border-radius: 30px;
+      background: #0f3460;
+      padding: 5px 12px;
+      border-radius: 40px;
     }
     button, .file-label {
-      background: #1e88e5;
+      background: #e94560;
       border: none;
-      padding: 5px 12px;
+      padding: 6px 14px;
       border-radius: 30px;
       color: white;
       font-weight: 600;
@@ -61,40 +59,38 @@
       align-items: center;
       gap: 5px;
     }
-    button:hover, .file-label:hover { filter: brightness(0.92); transform: scale(0.96); }
-    button.secondary { background: #e2e6ea; color: #1e2a3e; }
-    button.active { background: #2c3e66; }
-    button.success { background: #2ecc71; }
-    .telegram-btn { background: #0088cc; }
-    .danger-btn { background: #e74c3c; }
-    input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; }
+    button:hover, .file-label:hover { filter: brightness(0.9); transform: scale(0.97); }
+    button.secondary { background: #533483; }
+    button.active { background: #0f3460; border: 2px solid #e94560; }
+    input[type="color"] { width: 35px; height: 35px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
+    input[type="range"] { width: 100px; }
     .board-container {
       display: flex;
       flex-direction: column;
       flex: 1;
-      gap: 10px;
+      gap: 12px;
       min-height: 0;
     }
     .board-card {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      background: #1e1e2f;
+      border-radius: 20px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
       display: flex;
       flex-direction: column;
       overflow: hidden;
       flex: 1;
     }
     .board-header {
-      padding: 6px 12px;
-      background: #fef9e6;
+      padding: 8px 15px;
+      background: #533483;
+      color: white;
       font-weight: bold;
-      border-bottom: 2px solid #ffd966;
-      font-size: 12px;
+      font-size: 13px;
     }
     .canvas-holder {
       position: relative;
       flex: 1;
-      background: #f0f2f5;
+      background: #2d2d44;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -102,56 +98,48 @@
     }
     canvas {
       display: block;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       background: white;
       cursor: crosshair;
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
     }
     .status-badge {
       position: absolute;
-      bottom: 8px;
-      right: 12px;
-      background: rgba(0,0,0,0.65);
+      bottom: 10px;
+      right: 15px;
+      background: rgba(0,0,0,0.7);
       color: white;
-      padding: 3px 10px;
-      border-radius: 30px;
-      font-size: 10px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
       pointer-events: none;
     }
     .slide-panel {
-      background: #2c3e66;
+      background: #0f3460;
       border-radius: 40px;
-      padding: 6px 12px;
+      padding: 6px 15px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 15px;
       flex-shrink: 0;
-    }
-    .slide-nav {
-      display: flex;
-      gap: 8px;
-      align-items: center;
     }
     .slide-thumbnails {
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      max-width: 400px;
+      max-width: 500px;
       padding: 4px;
     }
     .slide-thumb {
-      background: #ecf0f1;
-      border-radius: 8px;
-      padding: 4px 10px;
+      background: #533483;
+      border-radius: 10px;
+      padding: 4px 12px;
       font-size: 11px;
       cursor: pointer;
+      color: white;
       white-space: nowrap;
     }
     .slide-thumb.active {
-      background: #f39c12;
-      color: white;
+      background: #e94560;
     }
     .recording-indicator {
       position: fixed;
@@ -161,15 +149,24 @@
       color: white;
       padding: 5px 15px;
       border-radius: 30px;
-      font-weight: bold;
       animation: pulse 1s infinite;
       display: none;
       z-index: 1500;
       font-size: 12px;
     }
     @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
-    .mic-status { position: fixed; bottom: 15px; left: 15px; background: #27ae60; color: white; padding: 5px 12px; border-radius: 30px; font-size: 11px; display: none; z-index: 1500; }
-    .image-edit-panel { background: #2c3e66; padding: 4px 12px; border-radius: 30px; display: inline-flex; gap: 6px; }
+    .mic-status {
+      position: fixed;
+      bottom: 15px;
+      left: 15px;
+      background: #2ecc71;
+      color: white;
+      padding: 5px 12px;
+      border-radius: 30px;
+      font-size: 11px;
+      display: none;
+      z-index: 1500;
+    }
   </style>
 </head>
 <body>
@@ -181,7 +178,7 @@
   <div class="tool-group">
     <input type="color" id="penColor" value="#000000">
     <input type="range" id="brushWidth" min="1" max="40" value="3">
-    <span id="sizeLabel">3px</span>
+    <span id="sizeLabel" style="color:white;">3px</span>
   </div>
   <div class="tool-group">
     <button id="drawModeBtn" class="active">✏️ Draw</button>
@@ -195,39 +192,27 @@
     <input type="file" id="pdfUpload" accept=".pdf" style="display:none">
     <label for="pdfUpload" class="file-label">📄 PDF</label>
     <input type="file" id="quizUpload" accept=".txt" style="display:none">
-    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 Upload MCQ Slides</label>
-    <input type="file" id="imageUpload" accept="image/*" style="display:none">
-    <label for="imageUpload" class="file-label" style="background:#16a085;">🖼️ Add Image</label>
-    <input type="file" id="zipUpload" accept=".zip" style="display:none">
-    <label for="zipUpload" class="file-label" style="background:#8e44ad;">📦 ZIP Images</label>
-  </div>
-  <div class="image-edit-panel" id="imageEditTools" style="display:none;">
-    <button id="scaleUpBtn" style="background:#2ecc71;">🔍 +</button>
-    <button id="scaleDownBtn" style="background:#e67e22;">🔍 -</button>
-    <button id="rotateBtn" style="background:#3498db;">🔄</button>
-    <button id="flipHBtn" style="background:#9b59b6;">↔️ Flip</button>
-    <button id="deleteImageBtn" style="background:#e74c3c;">❌</button>
+    <label for="quizUpload" class="file-label" style="background:#e67e22;">📝 MCQ Slides</label>
   </div>
   <div class="tool-group">
     <button id="recordBtn" class="danger-btn">🔴 Record + Telegram</button>
     <button id="testTelegramBtn" class="telegram-btn">🤖 Test Bot</button>
+    <button id="toggleMicBtn" class="telegram-btn">🎙️ Mic</button>
   </div>
 </div>
 
-<!-- Slide Navigator Panel -->
+<!-- Slide Navigator Panel (only shows when MCQ loaded) -->
 <div class="slide-panel" id="slidePanel" style="display:none;">
   <span style="color:white;">📽️ Slides:</span>
-  <div class="slide-nav">
-    <button id="prevSlideBtn" class="secondary" style="background:#f39c12;">◀ Prev</button>
-    <span id="slideCounter" style="color:white; font-weight:bold;">1/1</span>
-    <button id="nextSlideBtn" class="secondary" style="background:#f39c12;">Next ▶</button>
-  </div>
+  <button id="prevSlideBtn" class="secondary" style="background:#e94560;">◀ Prev</button>
+  <span id="slideCounter" style="color:white; font-weight:bold;">1/1</span>
+  <button id="nextSlideBtn" class="secondary" style="background:#e94560;">Next ▶</button>
   <div id="slideThumbnails" class="slide-thumbnails"></div>
 </div>
 
 <div class="board-container">
   <div class="board-card">
-    <div class="board-header">📄 TOP: Fixed View (PDF/Slides/Images + Drawing)</div>
+    <div class="board-header">📄 TOP: Fixed View (PDF/MCQ + Drawing)</div>
     <div class="canvas-holder" id="topHolder">
       <canvas id="topCanvas"></canvas>
       <div class="status-badge" id="topStatus">Fixed View</div>
@@ -246,34 +231,38 @@
   // ========== TELEGRAM ==========
   const TELEGRAM = { BOT_TOKEN: '8142735342:AAHexGW7ZVeWorAb70i51P1hudv9rljUH7Q', CHAT_ID: '5229323108' };
   
-  // ========== GLOBALS ==========
+  // ========== CANVAS REFERENCES ==========
   const topCanvas = document.getElementById('topCanvas');
   const mainCanvas = document.getElementById('mainCanvas');
   let topCtx = topCanvas.getContext('2d');
   let mainCtx = mainCanvas.getContext('2d');
   
-  let pdfOffscreen = document.createElement('canvas');
-  let pdfOffCtx = pdfOffscreen.getContext('2d');
+  // LAYERS: Background (PDF/MCQ) + Drawing (user strokes)
+  let backgroundCanvas = document.createElement('canvas');
+  let bgCtx = backgroundCanvas.getContext('2d');
   let drawingLayerMain = document.createElement('canvas');
   let drawingLayerTop = document.createElement('canvas');
   let mainDrawCtx = drawingLayerMain.getContext('2d');
   let topDrawCtx = drawingLayerTop.getContext('2d');
   
+  // Drawing data
   let currentStrokes = [];
   let currentStrokePoints = [];
   let historyStack = []; let historyIndex = -1;
   let currentTool = 'draw';
   let penColor = '#000000';
   let penSize = 3;
-  let scale = 1, offsetX = 0, offsetY = 0;
-  let images = [];
-  let selectedImageIndex = -1;
   
-  // Slide data
+  // Transform for bottom canvas (zoom + pan)
+  let scale = 1, offsetX = 0, offsetY = 0;
+  
+  // Content type: 'pdf' or 'mcq'
+  let contentType = 'none';
+  let pdfDoc = null;
   let slides = [];
   let currentSlideIndex = 0;
   
-  // Drawing events
+  // Drawing event flags
   let isDrawing = false, lastPoint = {x:0,y:0}, isTap = false;
   let pinchDist = 0, pinchMid = {x:0,y:0};
   
@@ -284,52 +273,44 @@
   const hiddenRecordCanvas = document.createElement('canvas');
   let hiddenRecordCtx = hiddenRecordCanvas.getContext('2d');
   
-  // ========== UTILITIES ==========
-  function showToast(msg, isError=false) {
-    const toast = document.getElementById('micStatusToast');
-    toast.textContent = msg;
-    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
-    toast.style.display = 'block';
-    setTimeout(() => toast.style.display = 'none', 3000);
-  }
-  
+  // ========== CORE DRAWING FUNCTIONS ==========
   function setCanvasSize(w, h) {
     topCanvas.width = w; topCanvas.height = h;
     mainCanvas.width = w; mainCanvas.height = h;
+    backgroundCanvas.width = w; backgroundCanvas.height = h;
     drawingLayerMain.width = w; drawingLayerMain.height = h;
     drawingLayerTop.width = w; drawingLayerTop.height = h;
-    pdfOffscreen.width = w; pdfOffscreen.height = h;
     hiddenRecordCanvas.width = w; hiddenRecordCanvas.height = h;
     redrawAll();
   }
   
   function redrawAll() {
+    // Bottom canvas (with zoom)
     mainCtx.setTransform(1,0,0,1,0,0);
     mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height);
     mainCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
-    if(pdfOffscreen.width) mainCtx.drawImage(pdfOffscreen,0,0);
-    mainCtx.drawImage(drawingLayerMain,0,0);
+    mainCtx.drawImage(backgroundCanvas, 0, 0);
+    mainCtx.drawImage(drawingLayerMain, 0, 0);
     
+    // Top canvas (fixed)
     topCtx.setTransform(1,0,0,1,0,0);
     topCtx.clearRect(0,0, topCanvas.width, topCanvas.height);
-    topCtx.drawImage(pdfOffscreen,0,0);
-    topCtx.drawImage(drawingLayerTop,0,0);
+    topCtx.drawImage(backgroundCanvas, 0, 0);
+    topCtx.drawImage(drawingLayerTop, 0, 0);
     
     document.getElementById('mainStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x`;
   }
   
-  function getCanvasCoords(e, canvasRef = mainCanvas) {
-    const rect = canvasRef.getBoundingClientRect();
+  function getCanvasCoords(e) {
+    const rect = mainCanvas.getBoundingClientRect();
     const clientX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     const clientY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const canvasW = canvasRef.width, canvasH = canvasRef.height;
+    const canvasW = mainCanvas.width, canvasH = mainCanvas.height;
     const cssW = rect.width, cssH = rect.height;
     let canvasX = (clientX / cssW) * canvasW;
     let canvasY = (clientY / cssH) * canvasH;
-    if(canvasRef === mainCanvas) {
-      canvasX = (canvasX - offsetX) / scale;
-      canvasY = (canvasY - offsetY) / scale;
-    }
+    canvasX = (canvasX - offsetX) / scale;
+    canvasY = (canvasY - offsetY) / scale;
     return { x: Math.max(0, Math.min(canvasX, canvasW)), y: Math.max(0, Math.min(canvasY, canvasH)) };
   }
   
@@ -347,9 +328,11 @@
   }
   
   function restoreFromHistory(state) {
-    const mainImg = new Image(); mainImg.onload = () => { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); mainDrawCtx.drawImage(mainImg,0,0); redrawAll(); };
+    const mainImg = new Image(); 
+    mainImg.onload = () => { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); mainDrawCtx.drawImage(mainImg,0,0); redrawAll(); };
     mainImg.src = state.mainImg;
-    const topImg = new Image(); topImg.onload = () => { topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); topDrawCtx.drawImage(topImg,0,0); redrawAll(); };
+    const topImg = new Image(); 
+    topImg.onload = () => { topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); topDrawCtx.drawImage(topImg,0,0); redrawAll(); };
     topImg.src = state.topImg;
     currentStrokes = state.strokes || [];
   }
@@ -377,17 +360,14 @@
       mainDrawCtx.globalCompositeOperation = 'source-over'; topDrawCtx.globalCompositeOperation = 'source-over';
     } else if(currentTool === 'smartErase') {
       const tolerance = penSize * 2;
-      let removed = false;
       currentStrokes = currentStrokes.filter(stroke => {
         for(let p of stroke.points) {
-          if(Math.hypot(p.x - to.x, p.y - to.y) < tolerance) { removed = true; return false; }
+          if(Math.hypot(p.x - to.x, p.y - to.y) < tolerance) return false;
         }
         return true;
       });
-      if(removed) {
-        redrawAllStrokes();
-        saveHistory();
-      }
+      redrawAllStrokes();
+      saveHistory();
     }
     redrawAll();
   }
@@ -416,36 +396,35 @@
     currentStrokePoints = [];
   }
   
-  // ========== PDF ==========
+  // ========== PDF FUNCTIONALITY (SAME AS BEFORE) ==========
   document.getElementById('pdfUpload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if(!file) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const pdfData = new Uint8Array(ev.target.result);
-      const pdfDoc = await pdfjsLib.getDocument(pdfData).promise;
+      pdfDoc = await pdfjsLib.getDocument(pdfData).promise;
       const page = await pdfDoc.getPage(1);
       const viewport = page.getViewport({ scale: 1.5 });
       setCanvasSize(viewport.width, viewport.height);
-      pdfOffCtx.fillStyle = 'white'; pdfOffCtx.fillRect(0,0,viewport.width,viewport.height);
-      await page.render({ canvasContext: pdfOffCtx, viewport }).promise;
+      bgCtx.fillStyle = 'white'; bgCtx.fillRect(0,0,viewport.width,viewport.height);
+      await page.render({ canvasContext: bgCtx, viewport }).promise;
+      contentType = 'pdf';
+      document.getElementById('slidePanel').style.display = 'none';
       redrawAll();
-      showToast('PDF loaded!');
+      showToast('PDF loaded! You can draw on top of it.');
     };
     reader.readAsArrayBuffer(file);
   });
   
-  // ========== SLIDE PARSER (|Q| format with ### separator) ==========
+  // ========== MCQ SLIDE PARSER ==========
   function parseSlides(content) {
     const rawSlides = content.split(/###/g);
     const slidesData = [];
-    
     for(let slideContent of rawSlides) {
       if(!slideContent.trim()) continue;
-      
       const lines = slideContent.split(/\r?\n/);
       let slide = { q: '', a: '', b: '', c: '', d: '', ans: '' };
-      
       for(let line of lines) {
         line = line.trim();
         if(line.startsWith('|Q|')) slide.q = line.substring(3).trim();
@@ -455,51 +434,45 @@
         else if(line.startsWith('|D|')) slide.d = line.substring(3).trim();
         else if(line.startsWith('|ANS|')) slide.ans = line.substring(5).trim();
       }
-      
       if(slide.q) slidesData.push(slide);
     }
     return slidesData;
   }
   
-  function drawSlideOnCanvas(slide, index) {
-    // Clear drawing layers for new slide
-    mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height);
-    topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height);
-    currentStrokes = [];
+  function drawSlideOnBackground(slide, index) {
+    // Clear background
+    bgCtx.fillStyle = 'white';
+    bgCtx.fillRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
     
     let yPos = 80;
-    const lineHeight = 32;
-    const fontSize = 18;
+    const lineHeight = 38;
+    const fontSize = 20;
     
-    // Draw Question
-    [mainDrawCtx, topDrawCtx].forEach(ctx => {
-      ctx.font = `bold ${fontSize+2}px "Segoe UI"`;
-      ctx.fillStyle = '#1a5276';
-      ctx.fillText(`Q${index+1}. ${slide.q}`, 50, yPos);
-      yPos += lineHeight + 5;
-      
-      ctx.font = `${fontSize}px "Segoe UI"`;
-      ctx.fillStyle = '#2c3e66';
-      if(slide.a) ctx.fillText(`A) ${slide.a}`, 70, yPos);
-      yPos += lineHeight;
-      if(slide.b) ctx.fillText(`B) ${slide.b}`, 70, yPos);
-      yPos += lineHeight;
-      if(slide.c) ctx.fillText(`C) ${slide.c}`, 70, yPos);
-      yPos += lineHeight;
-      if(slide.d) ctx.fillText(`D) ${slide.d}`, 70, yPos);
-      yPos += lineHeight + 5;
-      
-      if(slide.ans) {
-        ctx.font = `italic ${fontSize-1}px "Segoe UI"`;
-        ctx.fillStyle = '#27ae60';
-        ctx.fillText(`✓ Answer: ${slide.ans}`, 70, yPos);
-      }
-    });
+    bgCtx.font = `bold ${fontSize+2}px "Segoe UI"`;
+    bgCtx.fillStyle = '#1a5276';
+    bgCtx.fillText(`Q${index+1}. ${slide.q}`, 50, yPos);
+    yPos += lineHeight + 8;
+    
+    bgCtx.font = `${fontSize}px "Segoe UI"`;
+    bgCtx.fillStyle = '#2c3e66';
+    if(slide.a) bgCtx.fillText(`A) ${slide.a}`, 70, yPos);
+    yPos += lineHeight;
+    if(slide.b) bgCtx.fillText(`B) ${slide.b}`, 70, yPos);
+    yPos += lineHeight;
+    if(slide.c) bgCtx.fillText(`C) ${slide.c}`, 70, yPos);
+    yPos += lineHeight;
+    if(slide.d) bgCtx.fillText(`D) ${slide.d}`, 70, yPos);
+    yPos += lineHeight + 8;
+    
+    if(slide.ans) {
+      bgCtx.font = `italic ${fontSize-1}px "Segoe UI"`;
+      bgCtx.fillStyle = '#27ae60';
+      bgCtx.fillText(`✓ Answer: ${slide.ans}`, 70, yPos);
+    }
     
     redrawAll();
-    saveHistory();
     
-    // Trigger MathJax for LaTeX
+    // Trigger MathJax
     if(window.MathJax) {
       MathJax.typesetPromise();
     }
@@ -507,24 +480,20 @@
   
   function updateSlideDisplay() {
     if(!slides.length) return;
-    drawSlideOnCanvas(slides[currentSlideIndex], currentSlideIndex);
+    drawSlideOnBackground(slides[currentSlideIndex], currentSlideIndex);
     document.getElementById('slideCounter').innerHTML = `${currentSlideIndex+1}/${slides.length}`;
     
-    // Update thumbnails
     const container = document.getElementById('slideThumbnails');
     container.innerHTML = '';
     slides.forEach((slide, idx) => {
       const thumb = document.createElement('div');
       thumb.className = 'slide-thumb' + (idx === currentSlideIndex ? ' active' : '');
-      // Get first few words of question for thumbnail
-      const shortQ = slide.q.substring(0, 25) + (slide.q.length > 25 ? '...' : '');
-      thumb.textContent = `${idx+1}: ${shortQ}`;
+      thumb.textContent = `${idx+1}`;
       thumb.onclick = () => { currentSlideIndex = idx; updateSlideDisplay(); };
       container.appendChild(thumb);
     });
   }
   
-  // FIXED: Auto-draw when file is uploaded
   document.getElementById('quizUpload').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if(!file) return;
@@ -533,12 +502,14 @@
       const content = ev.target.result;
       slides = parseSlides(content);
       if(slides.length) {
+        setCanvasSize(1200, 800);
+        contentType = 'mcq';
         currentSlideIndex = 0;
-        updateSlideDisplay();  // This draws the first slide automatically
+        updateSlideDisplay();
         document.getElementById('slidePanel').style.display = 'flex';
-        showToast(`${slides.length} slides loaded! Slide 1 drawn on canvas. Use ◀ ▶ to navigate.`);
+        showToast(`${slides.length} slides loaded! Draw on top using tools.`);
       } else {
-        showToast('No valid slides found! Use |Q| format with ### separator', true);
+        showToast('No valid slides! Use |Q| format with ###', true);
       }
     };
     reader.readAsText(file);
@@ -557,150 +528,208 @@
     }
   };
   
-  // ========== IMAGES ==========
-  function drawAllImages() {
-    images.forEach((imgData) => {
-      [mainDrawCtx, topDrawCtx].forEach(ctx => {
-        ctx.save();
-        ctx.translate(imgData.x + imgData.width/2, imgData.y + imgData.height/2);
-        ctx.rotate(imgData.rotation * Math.PI/180);
-        ctx.scale(imgData.flipH ? -1 : 1, imgData.flipV ? -1 : 1);
-        ctx.drawImage(imgData.img, -imgData.width/2, -imgData.height/2, imgData.width, imgData.height);
-        ctx.restore();
-      });
-    });
-    redrawAll();
+  // ========== DRAWING EVENT HANDLERS ==========
+  function startDraw(e) { 
+    isDrawing = true; 
+    isTap = true; 
+    lastPoint = getCanvasCoords(e); 
+    if(currentTool !== 'smartErase') saveHistory(); 
+    currentStrokePoints = []; 
   }
   
-  function addImageToCanvas(imgElement) {
-    const imgWidth = 250, imgHeight = (imgElement.height/imgElement.width)*250;
-    images.push({ img: imgElement, x: 100, y: 100, width: imgWidth, height: imgHeight, rotation: 0, flipH: false, flipV: false });
-    drawAllImages();
-    document.getElementById('imageEditTools').style.display = 'flex';
-    selectedImageIndex = images.length-1;
-    saveHistory();
-    showToast('Image added!');
-  }
-  
-  document.getElementById('imageUpload').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if(!file) return;
-    const img = new Image();
-    img.onload = () => addImageToCanvas(img);
-    img.src = URL.createObjectURL(file);
-  });
-  
-  document.getElementById('zipUpload').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if(!file) return;
-    const JSZip = window.JSZip;
-    const zip = await JSZip.loadAsync(file);
-    for(let [filename, zipEntry] of Object.entries(zip.files)) {
-      if(/\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) {
-        const blob = await zipEntry.async('blob');
-        const url = URL.createObjectURL(blob);
-        const img = new Image();
-        await new Promise((resolve) => { img.onload = resolve; img.src = url; });
-        addImageToCanvas(img);
-      }
-    }
-    showToast('Images added from ZIP!');
-  });
-  
-  document.getElementById('scaleUpBtn').onclick = () => {
-    if(selectedImageIndex>=0) { images[selectedImageIndex].width *= 1.1; images[selectedImageIndex].height *= 1.1; drawAllImages(); saveHistory(); }
-  };
-  document.getElementById('scaleDownBtn').onclick = () => {
-    if(selectedImageIndex>=0) { images[selectedImageIndex].width *= 0.9; images[selectedImageIndex].height *= 0.9; drawAllImages(); saveHistory(); }
-  };
-  document.getElementById('rotateBtn').onclick = () => {
-    if(selectedImageIndex>=0) { images[selectedImageIndex].rotation = (images[selectedImageIndex].rotation + 90) % 360; drawAllImages(); saveHistory(); }
-  };
-  document.getElementById('flipHBtn').onclick = () => {
-    if(selectedImageIndex>=0) { images[selectedImageIndex].flipH = !images[selectedImageIndex].flipH; drawAllImages(); saveHistory(); }
-  };
-  document.getElementById('deleteImageBtn').onclick = () => {
-    if(selectedImageIndex>=0) { images.splice(selectedImageIndex,1); selectedImageIndex = -1; drawAllImages(); saveHistory(); if(images.length===0) document.getElementById('imageEditTools').style.display = 'none'; }
-  };
-  
-  // ========== DRAWING HANDLERS ==========
-  function startDraw(e) { isDrawing=true; isTap=true; lastPoint = getCanvasCoords(e, mainCanvas); if(currentTool!=='smartErase') saveHistory(); currentStrokePoints=[]; }
   function drawMove(e) {
     if(!isDrawing) return;
-    const p = getCanvasCoords(e, mainCanvas);
-    if(isTap && Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y)<2) return;
-    isTap=false;
+    const p = getCanvasCoords(e);
+    if(isTap && Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y) < 2) return;
+    isTap = false;
     drawStroke(lastPoint, p, false);
     currentStrokePoints.push({x:p.x, y:p.y});
     lastPoint = p;
   }
+  
   function endDraw(e) {
     if(!isDrawing) return;
-    if(isTap) { const p = getCanvasCoords(e, mainCanvas); drawStroke(p, p, true); currentStrokePoints.push({x:p.x,y:p.y}); finalizeStroke(); }
-    else { finalizeStroke(); }
-    isDrawing=false;
+    if(isTap) { 
+      const p = getCanvasCoords(e); 
+      drawStroke(p, p, true); 
+      currentStrokePoints.push({x:p.x, y:p.y}); 
+      finalizeStroke(); 
+    } else { 
+      finalizeStroke(); 
+    }
+    isDrawing = false;
   }
+  
+  // Mouse events
   mainCanvas.addEventListener('mousedown', startDraw);
   window.addEventListener('mousemove', drawMove);
   window.addEventListener('mouseup', endDraw);
-  mainCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); if(e.touches.length===1) startDraw(e); else if(e.touches.length===2) { pinchDist = getDistance(e.touches[0], e.touches[1]); pinchMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas); isDrawing=false; } });
-  mainCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); if(e.touches.length===1) drawMove(e); else if(e.touches.length===2) { const newDist = getDistance(e.touches[0], e.touches[1]); const newMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas); if(pinchDist) { const zoom = newDist/pinchDist; const worldX = (pinchMid.x - offsetX)/scale; const worldY = (pinchMid.y - offsetY)/scale; scale *= zoom; scale = Math.min(12, Math.max(0.2, scale)); offsetX = pinchMid.x - worldX*scale; offsetY = pinchMid.y - worldY*scale; offsetX += newMid.x - pinchMid.x; offsetY += newMid.y - pinchMid.y; redrawAll(); } pinchDist = newDist; pinchMid = newMid; } });
-  mainCanvas.addEventListener('touchend', (e) => { if(e.touches.length<2) pinchDist=0; if(e.touches.length===0 && isDrawing) endDraw(e); });
-  function getDistance(a,b) { return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
-  function getMidpoint(a,b, ref) { const rect = ref.getBoundingClientRect(); return { x: ((a.clientX+b.clientX)/2 - rect.left) * (ref.width/rect.width), y: ((a.clientY+b.clientY)/2 - rect.top) * (ref.height/rect.height) }; }
+  
+  // Touch events with pinch zoom
+  mainCanvas.addEventListener('touchstart', (e) => { 
+    e.preventDefault(); 
+    if(e.touches.length === 1) startDraw(e); 
+    else if(e.touches.length === 2) { 
+      pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      const rect = mainCanvas.getBoundingClientRect();
+      pinchMid = {
+        x: ((e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left) * (mainCanvas.width/rect.width),
+        y: ((e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top) * (mainCanvas.height/rect.height)
+      };
+      isDrawing = false; 
+    }
+  });
+  
+  mainCanvas.addEventListener('touchmove', (e) => { 
+    e.preventDefault(); 
+    if(e.touches.length === 1) drawMove(e); 
+    else if(e.touches.length === 2) { 
+      const newDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      const rect = mainCanvas.getBoundingClientRect();
+      const newMid = {
+        x: ((e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left) * (mainCanvas.width/rect.width),
+        y: ((e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top) * (mainCanvas.height/rect.height)
+      };
+      if(pinchDist) {
+        const zoom = newDist / pinchDist;
+        const worldX = (pinchMid.x - offsetX) / scale;
+        const worldY = (pinchMid.y - offsetY) / scale;
+        scale *= zoom;
+        scale = Math.min(12, Math.max(0.2, scale));
+        offsetX = pinchMid.x - worldX * scale;
+        offsetY = pinchMid.y - worldY * scale;
+        offsetX += newMid.x - pinchMid.x;
+        offsetY += newMid.y - pinchMid.y;
+        redrawAll();
+      }
+      pinchDist = newDist;
+      pinchMid = newMid;
+    }
+  });
+  
+  mainCanvas.addEventListener('touchend', (e) => { 
+    if(e.touches.length < 2) pinchDist = 0; 
+    if(e.touches.length === 0 && isDrawing) endDraw(e); 
+  });
   
   // ========== UI BUTTONS ==========
-  document.getElementById('drawModeBtn').onclick = () => { currentTool='draw'; highlight('drawModeBtn'); };
-  document.getElementById('eraserBtn').onclick = () => { currentTool='eraser'; highlight('eraserBtn'); };
-  document.getElementById('smartEraseBtn').onclick = () => { currentTool='smartErase'; highlight('smartEraseBtn'); };
-  function highlight(id) { ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(i=>document.getElementById(i).classList.remove('active')); document.getElementById(id).classList.add('active'); }
-  document.getElementById('clearAllBtn').onclick = () => { if(confirm('Clear all drawings?')) { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); currentStrokes=[]; saveHistory(); redrawAll(); } };
+  function highlightTool(id) {
+    ['drawModeBtn','eraserBtn','smartEraseBtn'].forEach(i => document.getElementById(i).classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  
+  document.getElementById('drawModeBtn').onclick = () => { currentTool='draw'; highlightTool('drawModeBtn'); };
+  document.getElementById('eraserBtn').onclick = () => { currentTool='eraser'; highlightTool('eraserBtn'); };
+  document.getElementById('smartEraseBtn').onclick = () => { currentTool='smartErase'; highlightTool('smartEraseBtn'); };
+  document.getElementById('clearAllBtn').onclick = () => { 
+    if(confirm('Clear all drawings?')) { 
+      mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); 
+      topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); 
+      currentStrokes = []; 
+      saveHistory(); 
+      redrawAll(); 
+    } 
+  };
   document.getElementById('undoBtn').onclick = undo;
   document.getElementById('redoBtn').onclick = redo;
   document.getElementById('penColor').addEventListener('input', (e) => penColor = e.target.value);
   document.getElementById('brushWidth').addEventListener('input', (e) => { penSize = parseInt(e.target.value); document.getElementById('sizeLabel').innerText = penSize+'px'; });
   
   // ========== TELEGRAM & RECORDING ==========
-  async function testTelegram() { try { const r = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/getMe`); const j = await r.json(); showToast(j.ok ? 'Bot OK' : 'Failed', !j.ok); } catch(e) { showToast('Network error', true); } }
-  async function uploadToTelegram(blob, filename) {
-    const fd = new FormData(); fd.append('chat_id', TELEGRAM.CHAT_ID); fd.append('document', blob, filename);
-    try { const res = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/sendDocument`, { method: 'POST', body: fd }); return (await res.json()).ok; } catch(e) { return false; }
+  function showToast(msg, isError=false) {
+    const toast = document.getElementById('micStatusToast');
+    toast.textContent = msg;
+    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 3000);
   }
+  
+  async function testTelegram() { 
+    try { 
+      const r = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/getMe`); 
+      const j = await r.json(); 
+      showToast(j.ok ? 'Bot OK' : 'Failed', !j.ok); 
+    } catch(e) { showToast('Network error', true); } 
+  }
+  
+  async function uploadToTelegram(blob, filename) {
+    const fd = new FormData(); 
+    fd.append('chat_id', TELEGRAM.CHAT_ID); 
+    fd.append('document', blob, filename);
+    try { 
+      const res = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/sendDocument`, { method: 'POST', body: fd }); 
+      return (await res.json()).ok; 
+    } catch(e) { return false; }
+  }
+  
   async function startRecording() {
-    if(isRecording) { if(mediaRecorder) mediaRecorder.stop(); if(recordingInterval) clearInterval(recordingInterval); isRecording=false; document.getElementById('recIndicator').style.display='none'; showToast('Recording saved'); return; }
+    if(isRecording) { 
+      if(mediaRecorder) mediaRecorder.stop(); 
+      if(recordingInterval) clearInterval(recordingInterval); 
+      isRecording=false; 
+      document.getElementById('recIndicator').style.display='none'; 
+      showToast('Recording saved'); 
+      return; 
+    }
+    
     let audioTracks = null;
-    if(isMicEnabled) { try { const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); audioTracks = audioStream.getAudioTracks(); } catch(e){} }
-    hiddenRecordCanvas.width = topCanvas.width; hiddenRecordCanvas.height = topCanvas.height;
+    if(isMicEnabled) { 
+      try { 
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
+        audioTracks = audioStream.getAudioTracks(); 
+      } catch(e){} 
+    }
+    
+    hiddenRecordCanvas.width = topCanvas.width; 
+    hiddenRecordCanvas.height = topCanvas.height;
     const canvasStream = hiddenRecordCanvas.captureStream(20);
     let finalStream = canvasStream;
     if(audioTracks && audioTracks.length) finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    
     mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' });
     recordedChunks = [];
     mediaRecorder.ondataavailable = e => { if(e.data.size) recordedChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       await uploadToTelegram(blob, `whiteboard_${Date.now()}.webm`);
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'recording.webm'; a.click();
+      const a = document.createElement('a'); 
+      a.href = URL.createObjectURL(blob); 
+      a.download = 'recording.webm'; 
+      a.click();
       if(recordingInterval) clearInterval(recordingInterval);
     };
-    recordingInterval = setInterval(() => { hiddenRecordCtx.drawImage(topCanvas, 0, 0); }, 40);
+    
+    recordingInterval = setInterval(() => { 
+      hiddenRecordCtx.drawImage(topCanvas, 0, 0); 
+    }, 40);
+    
     mediaRecorder.start(500);
-    isRecording=true; document.getElementById('recIndicator').style.display='block';
+    isRecording=true; 
+    document.getElementById('recIndicator').style.display='block';
   }
-  async function enableMic() { try { if(micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream=null; isMicEnabled=false; showToast('Mic disabled'); return; } const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); micStream=stream; isMicEnabled=true; showToast('Mic ready'); } catch(e){ showToast('Mic denied',true); } }
+  
+  async function enableMic() { 
+    try { 
+      if(micStream) { 
+        micStream.getTracks().forEach(t=>t.stop()); 
+        micStream=null; 
+        isMicEnabled=false; 
+        showToast('Mic disabled'); 
+        return; 
+      } 
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
+      micStream=stream; 
+      isMicEnabled=true; 
+      showToast('Mic ready'); 
+    } catch(e){ showToast('Mic denied',true); } 
+  }
+  
   document.getElementById('recordBtn').onclick = startRecording;
   document.getElementById('testTelegramBtn').onclick = testTelegram;
+  document.getElementById('toggleMicBtn').onclick = enableMic;
   
-  if(!document.getElementById('toggleMicBtn')) {
-    const micBtn = document.createElement('button');
-    micBtn.id = 'toggleMicBtn';
-    micBtn.textContent = '🎙️ Enable Mic';
-    micBtn.className = 'telegram-btn';
-    micBtn.onclick = enableMic;
-    document.querySelector('.tool-group:last-child').appendChild(micBtn);
-  }
-  
-  setCanvasSize(1200, 675);
+  // ========== INIT ==========
+  setCanvasSize(1200, 800);
   saveHistory();
   testTelegram();
 </script>
