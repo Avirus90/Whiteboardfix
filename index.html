@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard – Full Featured (Vertex Edit, New Shapes)</title>
+    <title>Whiteboard – Vertex Edit Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -417,8 +417,9 @@
             const pts = getObjectPoints(obj);
             ctx.fillStyle = '#00ff88';
             ctx.strokeStyle = '#000';
+            const vertexRadius = Math.max(10 / scale, 16); // bigger and easier to grab
             pts.forEach(p => {
-                ctx.beginPath(); ctx.arc(p.x, p.y, 6 / scale, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.arc(p.x, p.y, vertexRadius, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
             });
             return;
         }
@@ -528,7 +529,7 @@
         if (editingEnabled && vertexEditEnabled && selectedObjectIndex >= 0) {
             const obj = objects[selectedObjectIndex];
             const pts = getObjectPoints(obj);
-            const hSize = Math.max(8 / scale, 12);
+            const hSize = Math.max(12 / scale, 18); // larger hit area
             for (let i = 0; i < pts.length; i++) {
                 if (Math.hypot(p.x - pts[i].x, p.y - pts[i].y) < hSize) {
                     isDraggingVertex = true;
@@ -1193,7 +1194,7 @@
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Whiteboard fully loaded with all features.');
+    console.log('✅ Vertex edit is fixed – larger handles and hit areas.');
 </script>
 </body>
 </html>
