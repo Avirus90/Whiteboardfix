@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard – Improved Edit Mode & Handle Detection</title>
+    <title>Whiteboard – Full Featured (Vertex Edit, New Shapes)</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -132,11 +132,14 @@
         </div>
     </div>
     <div class="tool-section">
-        <h4>🔷 Shapes & Text</h4>
+        <h4>🔷 Shapes</h4>
         <div class="tool-row">
             <button id="rectBtn">⬛ Rect</button>
             <button id="circleBtn">⚪ Circle</button>
             <button id="arrowBtn">➡️ Arrow</button>
+            <button id="lineBtn">📏 Line</button>
+            <button id="triangleBtn">🔺 Triangle</button>
+            <button id="diamondBtn">💎 Diamond</button>
             <button id="textBtn">📝 Text</button>
             <button id="latexBtn" class="accent2">📐 LaTeX</button>
         </div>
@@ -146,6 +149,7 @@
         <div class="tool-row">
             <button id="selectBtn">🖱️ Select</button>
             <button id="editToggleBtn">🔧 Edit Mode</button>
+            <button id="vertexEditBtn">✏️ Vertex Edit</button>
         </div>
         <div class="tool-row" id="objectActionGroup" style="display:none;margin-top:8px;">
             <button id="rotateLeftBtn" title="Rotate -15°">↺ -15°</button>
@@ -203,13 +207,8 @@
 </div>
 
 <div class="slide-sidebar" id="slideSidebar">
-    <div class="slide-title">
-        <span>📚 SLIDES / PAGES</span>
-        <button class="close-slide" id="closeSlideBtn">✕</button>
-    </div>
-    <div class="slide-list" id="slideList">
-        <div style="text-align:center;padding:30px;color:gray;">No slides loaded.</div>
-    </div>
+    <div class="slide-title"><span>📚 SLIDES / PAGES</span><button class="close-slide" id="closeSlideBtn">✕</button></div>
+    <div class="slide-list" id="slideList"><div style="text-align:center;padding:30px;color:gray;">No slides loaded.</div></div>
 </div>
 <button class="toggle-slide-btn" id="toggleSlideBtn">📋</button>
 
@@ -226,22 +225,20 @@
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-    // ==================== DOM ELEMENTS ====================
+    // ========== DOM ELEMENTS ==========
     const topCanvas = document.getElementById('topCanvas');
     const bottomCanvas = document.getElementById('bottomCanvas');
     const topCtx = topCanvas.getContext('2d');
     const bottomCtx = bottomCanvas.getContext('2d');
-
     const bgCanvas = document.createElement('canvas');
     const bgCtx = bgCanvas.getContext('2d');
     const drawLayer = document.createElement('canvas');
     const drawCtx = drawLayer.getContext('2d');
-
     drawCtx.lineCap = 'round';
     drawCtx.lineJoin = 'round';
 
-    // ==================== STATE ====================
-    let currentTool = 'draw';      // 'draw','marker','highlighter','eraser','fill','rect','circle','arrow','select','none'
+    // ========== STATE ==========
+    let currentTool = 'draw';
     let penColor = '#000000';
     let penSize = 4;
     let opacity = 1;
@@ -260,6 +257,7 @@
 
     let objects = [];
     let editingEnabled = false;
+    let vertexEditEnabled = false;
     let selectedObjectIndex = -1;
 
     let history = [];
@@ -281,8 +279,10 @@
     let resizeStartBounds = null;
     let isRotating = false;
     let rotateStartAngle = 0;
+    let isDraggingVertex = false;
+    let vertexIndex = -1;
 
-    // ==================== CANVAS SETUP ====================
+    // ========== CANVAS SETUP ==========
     function setCanvasSize(w, h) {
         [topCanvas, bottomCanvas, bgCanvas, drawLayer].forEach(c => { c.width = w; c.height = h; });
         drawCtx.clearRect(0, 0, w, h);
@@ -292,14 +292,13 @@
         redrawAll();
     }
 
-    // ==================== BRUSH HELPERS ====================
+    // ========== BRUSH HELPERS ==========
     function setBrush(ctx) {
         ctx.globalAlpha = opacity;
         ctx.lineWidth = penSize;
         ctx.strokeStyle = penColor;
         ctx.fillStyle = penColor;
         ctx.globalCompositeOperation = 'source-over';
-
         if (currentTool === 'marker') {
             ctx.globalAlpha = opacity * 0.75;
             ctx.lineWidth = penSize * 1.3;
@@ -313,18 +312,58 @@
         }
     }
 
-    // ==================== OBJECT UTILS ====================
-    function getObjectBounds(obj) {
-        if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, rotation: obj.rotation || 0, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2 };
-        if (obj.type === 'circle') return { x: obj.cx - obj.rx, y: obj.cy - obj.ry, w: obj.rx * 2, h: obj.ry * 2, rotation: obj.rotation || 0, cx: obj.cx, cy: obj.cy };
-        if (obj.type === 'arrow') {
-            const minX = Math.min(obj.x1, obj.x2), maxX = Math.max(obj.x1, obj.x2);
-            const minY = Math.min(obj.y1, obj.y2), maxY = Math.max(obj.y1, obj.y2);
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, rotation: 0, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+    // ========== OBJECT GEOMETRY ==========
+    function getObjectPoints(obj) {
+        if (obj.points) return obj.points;
+        if (obj.type === 'rect') {
+            const { x, y, w, h } = obj;
+            return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
         }
-        if (obj.type === 'image' || obj.type === 'latex') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, rotation: obj.rotation || 0, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2 };
-        if (obj.type === 'text') return { x: obj.x, y: obj.y, w: obj.w || 100, h: obj.h || 30, rotation: obj.rotation || 0, cx: obj.x + (obj.w || 100) / 2, cy: obj.y + (obj.h || 30) / 2 };
-        return { x: 0, y: 0, w: 0, h: 0, rotation: 0, cx: 0, cy: 0 };
+        if (obj.type === 'circle') {
+            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
+            return [{ x: cx, y: cy - ry }, { x: cx + rx, y: cy }, { x: cx, y: cy + ry }, { x: cx - rx, y: cy }];
+        }
+        if (obj.type === 'arrow' || obj.type === 'line') {
+            return [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
+        }
+        if (obj.type === 'triangle') {
+            return obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+        }
+        if (obj.type === 'diamond') {
+            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
+            return [{ x: cx, y: cy - ry }, { x: cx + rx, y: cy }, { x: cx, y: cy + ry }, { x: cx - rx, y: cy }];
+        }
+        return [];
+    }
+
+    function getObjectBounds(obj) {
+        if (obj.points) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            obj.points.forEach(p => {
+                minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+            });
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rotation: 0 };
+        }
+        if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2, rotation: obj.rotation || 0 };
+        if (obj.type === 'circle') return { x: obj.cx - obj.rx, y: obj.cy - obj.ry, w: obj.rx * 2, h: obj.ry * 2, cx: obj.cx, cy: obj.cy, rotation: obj.rotation || 0 };
+        if (obj.type === 'arrow' || obj.type === 'line') {
+            const minX = Math.min(obj.x1, obj.x2), maxX = Math.max(obj.x1, obj.x2), minY = Math.min(obj.y1, obj.y2), maxY = Math.max(obj.y1, obj.y2);
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rotation: 0 };
+        }
+        if (obj.type === 'triangle') {
+            const pts = obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            pts.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rotation: 0 };
+        }
+        if (obj.type === 'diamond') {
+            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
+            return { x: cx - rx, y: cy - ry, w: rx * 2, h: ry * 2, cx, cy, rotation: obj.rotation || 0 };
+        }
+        if (obj.type === 'image' || obj.type === 'latex') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2, rotation: obj.rotation || 0 };
+        if (obj.type === 'text') return { x: obj.x, y: obj.y, w: obj.w || 100, h: obj.h || 30, cx: obj.x + (obj.w || 100) / 2, cy: obj.y + (obj.h || 30) / 2, rotation: obj.rotation || 0 };
+        return { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0, rotation: 0 };
     }
 
     function hitTestObject(px, py) {
@@ -337,30 +376,17 @@
 
     function drawObject(ctx, obj) {
         ctx.save();
-        const b = getObjectBounds(obj);
-        ctx.translate(b.cx, b.cy);
-        if (obj.rotation) ctx.rotate((obj.rotation * Math.PI) / 180);
-        if (obj.flipH) ctx.scale(-1, 1);
-        if (obj.flipV) ctx.scale(1, -1);
-        ctx.translate(-b.cx, -b.cy);
-
         ctx.strokeStyle = obj.strokeStyle || penColor;
         ctx.lineWidth = obj.lineWidth || penSize;
         ctx.globalAlpha = obj.opacity || opacity;
         ctx.globalCompositeOperation = 'source-over';
 
         if (obj.type === 'rect') {
-            ctx.beginPath();
-            ctx.rect(obj.x, obj.y, obj.w, obj.h);
-            ctx.stroke();
+            ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke();
         } else if (obj.type === 'circle') {
-            ctx.beginPath();
-            ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2 * Math.PI);
-            ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2 * Math.PI); ctx.stroke();
         } else if (obj.type === 'arrow') {
-            ctx.beginPath();
-            ctx.moveTo(obj.x1, obj.y1);
-            ctx.lineTo(obj.x2, obj.y2);
+            ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2);
             const angle = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
             const sz = Math.min(20, Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * 0.25);
             ctx.moveTo(obj.x2, obj.y2);
@@ -368,6 +394,14 @@
             ctx.moveTo(obj.x2, obj.y2);
             ctx.lineTo(obj.x2 - sz * Math.cos(angle + Math.PI / 6), obj.y2 - sz * Math.sin(angle + Math.PI / 6));
             ctx.stroke();
+        } else if (obj.type === 'line') {
+            ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
+        } else if (obj.type === 'triangle') {
+            const pts = obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+            ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.closePath(); ctx.stroke();
+        } else if (obj.type === 'diamond') {
+            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
+            ctx.beginPath(); ctx.moveTo(cx, cy - ry); ctx.lineTo(cx + rx, cy); ctx.lineTo(cx, cy + ry); ctx.lineTo(cx - rx, cy); ctx.closePath(); ctx.stroke();
         } else if (obj.type === 'image' || obj.type === 'latex') {
             if (obj.img && obj.img.complete) ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
         } else if (obj.type === 'text') {
@@ -379,6 +413,15 @@
     }
 
     function drawSelectionHandles(ctx, obj) {
+        if (vertexEditEnabled && (obj.type !== 'image' && obj.type !== 'latex' && obj.type !== 'text')) {
+            const pts = getObjectPoints(obj);
+            ctx.fillStyle = '#00ff88';
+            ctx.strokeStyle = '#000';
+            pts.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 6 / scale, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+            });
+            return;
+        }
         const b = getObjectBounds(obj);
         ctx.save();
         ctx.strokeStyle = '#ffd700';
@@ -386,15 +429,14 @@
         ctx.setLineDash([8 / scale, 5 / scale]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
         ctx.setLineDash([]);
-        // Make handles visibly larger and easier to grab
-        const hSize = Math.max(12 / scale, 14);  // minimum 14 pixels
-        ctx.fillStyle = '#ffd700';
-        [
-            [b.x, b.y],
-            [b.x + b.w, b.y],
-            [b.x, b.y + b.h],
-            [b.x + b.w, b.y + b.h]
-        ].forEach(([cx, cy]) => ctx.fillRect(cx - hSize / 2, cy - hSize / 2, hSize, hSize));
+        const hSize = Math.max(12 / scale, 14);
+        if (obj.type === 'arrow' || obj.type === 'line') {
+            ctx.fillStyle = '#ffd700';
+            [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }].forEach(({ x, y }) => ctx.fillRect(x - hSize / 2, y - hSize / 2, hSize, hSize));
+        } else {
+            ctx.fillStyle = '#ffd700';
+            [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => ctx.fillRect(cx - hSize / 2, cy - hSize / 2, hSize, hSize));
+        }
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
         ctx.arc(b.x + b.w / 2, b.y - 22 / scale, hSize / 1.5, 0, 2 * Math.PI);
@@ -402,7 +444,6 @@
         ctx.restore();
     }
 
-    // ==================== RENDERING ====================
     function redrawAll() {
         bottomCtx.setTransform(1, 0, 0, 1, 0, 0);
         bottomCtx.clearRect(0, 0, bottomCanvas.width, bottomCanvas.height);
@@ -425,11 +466,11 @@
         }
 
         document.getElementById('bottomStatus').innerHTML =
-            `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | ${editingEnabled ? '🔧 Edit ON' : '✏️ Draw Mode'} | Tool: ${currentTool === 'none' ? 'None' : currentTool}`;
+            `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | ${editingEnabled ? '🔧 Edit' : '✏️ Draw'} ${vertexEditEnabled ? ' | Vertex' : ''}`;
         document.getElementById('objectActionGroup').style.display = (editingEnabled && selectedObjectIndex >= 0) ? 'flex' : 'none';
     }
 
-    // ==================== HISTORY ====================
+    // ========== HISTORY ==========
     function saveHistory() {
         const state = {
             drawData: drawLayer.toDataURL(),
@@ -464,7 +505,7 @@
     function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(history[historyIndex]); } }
     function redo() { if (historyIndex < history.length - 1) { historyIndex++; restoreHistory(history[historyIndex]); } }
 
-    // ==================== COORDINATE HELPERS ====================
+    // ========== COORDINATE HELPERS ==========
     function getCanvasCoords(e) {
         const rect = bottomCanvas.getBoundingClientRect();
         let cx, cy;
@@ -477,13 +518,35 @@
         };
     }
 
-    // ==================== EVENT HANDLERS ====================
+    // ========== EVENT HANDLERS ==========
     function handleDown(e) {
         if (e.type === 'mousedown' && e.button !== 0) return;
         e.preventDefault();
         if (currentTool === 'none') return;
-
         const p = getCanvasCoords(e);
+
+        if (editingEnabled && vertexEditEnabled && selectedObjectIndex >= 0) {
+            const obj = objects[selectedObjectIndex];
+            const pts = getObjectPoints(obj);
+            const hSize = Math.max(8 / scale, 12);
+            for (let i = 0; i < pts.length; i++) {
+                if (Math.hypot(p.x - pts[i].x, p.y - pts[i].y) < hSize) {
+                    isDraggingVertex = true;
+                    vertexIndex = i;
+                    return;
+                }
+            }
+            if (hitTestObject(p.x, p.y) === selectedObjectIndex) {
+                isDraggingObject = true;
+                dragStartX = p.x; dragStartY = p.y;
+                dragOrigObj = JSON.parse(JSON.stringify(obj));
+                redrawAll();
+                return;
+            }
+            selectedObjectIndex = -1;
+            redrawAll();
+            return;
+        }
 
         if (currentTool === 'select') {
             const hit = hitTestObject(p.x, p.y);
@@ -501,32 +564,38 @@
         }
 
         if (editingEnabled) {
-            // Check if a selected object exists
             if (selectedObjectIndex >= 0) {
                 const obj = objects[selectedObjectIndex];
                 const b = getObjectBounds(obj);
-                const hSize = Math.max(12 / scale, 14);  // same as drawn
-
-                // Rotation handle
+                const hSize = Math.max(12 / scale, 14);
                 if (Math.hypot(p.x - (b.x + b.w / 2), p.y - (b.y - 22 / scale)) < hSize * 1.2) {
                     isRotating = true;
                     rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
                     return;
                 }
-
-                // Corner handles
-                const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
-                for (let i = 0; i < 4; i++) {
-                    if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
-                        isResizing = true;
-                        resizeHandle = i;
-                        resizeStartBounds = { ...b };
-                        dragStartX = p.x; dragStartY = p.y;
-                        return;
+                if (obj.type === 'arrow' || obj.type === 'line') {
+                    const handles = [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
+                    for (let i = 0; i < 2; i++) {
+                        if (Math.abs(p.x - handles[i].x) < hSize && Math.abs(p.y - handles[i].y) < hSize) {
+                            isResizing = true;
+                            resizeHandle = i;
+                            resizeStartBounds = { ...b, x1: obj.x1, y1: obj.y1, x2: obj.x2, y2: obj.y2 };
+                            dragStartX = p.x; dragStartY = p.y;
+                            return;
+                        }
+                    }
+                } else {
+                    const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
+                    for (let i = 0; i < 4; i++) {
+                        if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
+                            isResizing = true;
+                            resizeHandle = i;
+                            resizeStartBounds = { ...b };
+                            dragStartX = p.x; dragStartY = p.y;
+                            return;
+                        }
                     }
                 }
-
-                // If click is inside the object but not on a handle, allow dragging (move)
                 if (hitTestObject(p.x, p.y) === selectedObjectIndex) {
                     isDraggingObject = true;
                     dragStartX = p.x; dragStartY = p.y;
@@ -535,32 +604,18 @@
                     return;
                 }
             }
-
-            // If click is not on the selected object, try selecting another object
             const hit = hitTestObject(p.x, p.y);
-            if (hit >= 0) {
-                selectedObjectIndex = hit;
-                redrawAll();
-            } else {
-                selectedObjectIndex = -1;
-                redrawAll();
-            }
-            return; // No drawing in edit mode
-        }
-
-        if (currentTool === 'fill') {
-            floodFill(Math.round(p.x), Math.round(p.y));
+            if (hit >= 0) { selectedObjectIndex = hit; redrawAll(); } else { selectedObjectIndex = -1; redrawAll(); }
             return;
         }
 
-        if (['rect', 'circle', 'arrow'].includes(currentTool)) {
+        if (currentTool === 'fill') { floodFill(Math.round(p.x), Math.round(p.y)); return; }
+        if (['rect', 'circle', 'arrow', 'line', 'triangle', 'diamond'].includes(currentTool)) {
             shapeStart = p;
             currentShapeType = currentTool;
             drawing = true;
             return;
         }
-
-        // Pen / marker / highlighter / eraser
         drawing = true;
         smoothPoints = [{ x: p.x, y: p.y }];
         lastX = p.x; lastY = p.y;
@@ -568,6 +623,40 @@
     }
 
     function handleMove(e) {
+        if (isDraggingVertex && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            if (obj.points) {
+                obj.points[vertexIndex].x = p.x; obj.points[vertexIndex].y = p.y;
+            } else if (obj.type === 'rect') {
+                const pts = getObjectPoints(obj);
+                pts[vertexIndex].x = p.x; pts[vertexIndex].y = p.y;
+                const minX = Math.min(...pts.map(p => p.x)), minY = Math.min(...pts.map(p => p.y));
+                const maxX = Math.max(...pts.map(p => p.x)), maxY = Math.max(...pts.map(p => p.y));
+                obj.x = minX; obj.y = minY; obj.w = maxX - minX; obj.h = maxY - minY;
+            } else if (obj.type === 'circle') {
+                const pts = getObjectPoints(obj);
+                pts[vertexIndex].x = p.x; pts[vertexIndex].y = p.y;
+                const cx = (pts[0].x + pts[2].x) / 2, cy = (pts[1].y + pts[3].y) / 2;
+                obj.cx = cx; obj.cy = cy;
+                obj.rx = Math.max(5, Math.hypot(pts[1].x - cx, pts[1].y - cy));
+                obj.ry = Math.max(5, Math.hypot(pts[0].x - cx, pts[0].y - cy));
+            } else if (obj.type === 'arrow' || obj.type === 'line') {
+                if (vertexIndex === 0) { obj.x1 = p.x; obj.y1 = p.y; } else { obj.x2 = p.x; obj.y2 = p.y; }
+            } else if (obj.type === 'triangle') {
+                if (!obj.points) obj.points = [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+                obj.points[vertexIndex] = { x: p.x, y: p.y };
+            } else if (obj.type === 'diamond') {
+                const pts = getObjectPoints(obj);
+                pts[vertexIndex].x = p.x; pts[vertexIndex].y = p.y;
+                const cx = (pts[0].x + pts[2].x) / 2, cy = (pts[1].y + pts[3].y) / 2;
+                obj.cx = cx; obj.cy = cy;
+                obj.rx = Math.max(5, Math.abs(pts[1].x - cx));
+                obj.ry = Math.max(5, Math.abs(pts[0].y - cy));
+            }
+            redrawAll();
+            return;
+        }
         if (isRotating && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const obj = objects[selectedObjectIndex];
@@ -582,13 +671,17 @@
         if (isResizing && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const obj = objects[selectedObjectIndex];
-            const dx = p.x - dragStartX, dy = p.y - dragStartY;
-            const orig = resizeStartBounds;
-            if (resizeHandle === 0) { obj.x = orig.x + dx; obj.y = orig.y + dy; obj.w = orig.w - dx; obj.h = orig.h - dy; }
-            else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
-            else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
-            else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
-            if (obj.type === 'circle') { obj.rx = obj.w / 2; obj.ry = obj.h / 2; obj.cx = obj.x + obj.rx; obj.cy = obj.y + obj.ry; }
+            if (obj.type === 'arrow' || obj.type === 'line') {
+                if (resizeHandle === 0) { obj.x1 = p.x; obj.y1 = p.y; } else { obj.x2 = p.x; obj.y2 = p.y; }
+            } else {
+                const dx = p.x - dragStartX, dy = p.y - dragStartY;
+                const orig = resizeStartBounds;
+                if (resizeHandle === 0) { obj.x = orig.x + dx; obj.y = orig.y + dy; obj.w = orig.w - dx; obj.h = orig.h - dy; }
+                else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
+                else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
+                else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
+                if (obj.type === 'circle') { obj.rx = obj.w / 2; obj.ry = obj.h / 2; obj.cx = obj.x + obj.rx; obj.cy = obj.y + obj.ry; }
+            }
             redrawAll();
             return;
         }
@@ -600,10 +693,11 @@
                 obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy;
             } else if (obj.type === 'circle') {
                 obj.cx = dragOrigObj.cx + dx; obj.cy = dragOrigObj.cy + dy;
-                obj.x = obj.cx - obj.rx; obj.y = obj.cy - obj.ry;
-            } else if (obj.type === 'arrow') {
+            } else if (obj.type === 'arrow' || obj.type === 'line') {
                 obj.x1 = dragOrigObj.x1 + dx; obj.y1 = dragOrigObj.y1 + dy;
                 obj.x2 = dragOrigObj.x2 + dx; obj.y2 = dragOrigObj.y2 + dy;
+            } else if (obj.type === 'triangle' || obj.type === 'diamond') {
+                if (obj.points) obj.points = dragOrigObj.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
             }
             redrawAll();
             return;
@@ -619,6 +713,14 @@
             else if (currentShapeType === 'circle') {
                 const rx = Math.abs(p.x - shapeStart.x) / 2, ry = Math.abs(p.y - shapeStart.y) / 2;
                 bottomCtx.beginPath(); bottomCtx.ellipse(shapeStart.x + rx, shapeStart.y + ry, rx, ry, 0, 0, 2 * Math.PI); bottomCtx.stroke();
+            } else if (currentShapeType === 'arrow' || currentShapeType === 'line') {
+                bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.stroke();
+            } else if (currentShapeType === 'triangle') {
+                const midX = (shapeStart.x + p.x) / 2;
+                bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.lineTo(midX, shapeStart.y - 50); bottomCtx.closePath(); bottomCtx.stroke();
+            } else if (currentShapeType === 'diamond') {
+                const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2, rx = Math.abs(p.x - shapeStart.x) / 2, ry = Math.abs(p.y - shapeStart.y) / 2;
+                bottomCtx.beginPath(); bottomCtx.moveTo(cx, cy - ry); bottomCtx.lineTo(cx + rx, cy); bottomCtx.lineTo(cx, cy + ry); bottomCtx.lineTo(cx - rx, cy); bottomCtx.closePath(); bottomCtx.stroke();
             }
             bottomCtx.restore();
             return;
@@ -632,19 +734,21 @@
     }
 
     function handleUp(e) {
+        if (isDraggingVertex) { isDraggingVertex = false; saveHistory(); redrawAll(); return; }
         if (isRotating || isResizing) { isRotating = isResizing = false; saveHistory(); redrawAll(); return; }
         if (isDraggingObject) { isDraggingObject = false; saveHistory(); redrawAll(); return; }
         if (!drawing && !currentShapeType) return;
         e.preventDefault();
         if (currentShapeType && shapeStart) {
             const p = getCanvasCoords(e);
-            if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) < 5) {
-                currentShapeType = null; shapeStart = null; drawing = false; redrawAll(); return;
-            }
-            const obj = { type: currentShapeType, strokeStyle: penColor, lineWidth: penSize, opacity, rotation: 0, flipH: false, flipV: false };
-            if (currentShapeType === 'rect') { obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(p.x - shapeStart.x); obj.h = Math.abs(p.y - shapeStart.y); }
-            else if (currentShapeType === 'circle') { const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2; obj.cx = cx; obj.cy = cy; obj.rx = Math.abs(p.x - shapeStart.x) / 2; obj.ry = Math.abs(p.y - shapeStart.y) / 2; }
-            else if (currentShapeType === 'arrow') { obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
+            if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) < 5) { currentShapeType = null; shapeStart = null; drawing = false; redrawAll(); return; }
+            const obj = { strokeStyle: penColor, lineWidth: penSize, opacity, rotation: 0, flipH: false, flipV: false };
+            if (currentShapeType === 'rect') { obj.type = 'rect'; obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(p.x - shapeStart.x); obj.h = Math.abs(p.y - shapeStart.y); }
+            else if (currentShapeType === 'circle') { const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2; obj.type = 'circle'; obj.cx = cx; obj.cy = cy; obj.rx = Math.abs(p.x - shapeStart.x) / 2; obj.ry = Math.abs(p.y - shapeStart.y) / 2; }
+            else if (currentShapeType === 'arrow') { obj.type = 'arrow'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
+            else if (currentShapeType === 'line') { obj.type = 'line'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
+            else if (currentShapeType === 'triangle') { const midX = (shapeStart.x + p.x) / 2; obj.type = 'triangle'; obj.points = [{ x: shapeStart.x, y: shapeStart.y }, { x: p.x, y: p.y }, { x: midX, y: shapeStart.y - 50 }]; }
+            else if (currentShapeType === 'diamond') { const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2, rx = Math.abs(p.x - shapeStart.x) / 2, ry = Math.abs(p.y - shapeStart.y) / 2; obj.type = 'diamond'; obj.cx = cx; obj.cy = cy; obj.rx = rx; obj.ry = ry; }
             objects.push(obj);
             currentShapeType = null; shapeStart = null; drawing = false;
             redrawAll(); saveHistory();
@@ -670,7 +774,7 @@
         redrawAll();
     }
 
-    // ==================== FLOOD FILL ====================
+    // ========== FLOOD FILL ==========
     function floodFill(x, y) {
         const imgData = drawCtx.getImageData(0, 0, drawLayer.width, drawLayer.height);
         const target = getPixel(imgData, x, y);
@@ -693,7 +797,7 @@
     function colorMatch(c1, c2) { return Math.abs(c1.r - c2.r) < 10 && Math.abs(c1.g - c2.g) < 10 && Math.abs(c1.b - c2.b) < 10; }
     function hexToRgb(h) { return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) }; }
 
-    // ==================== PDF ====================
+    // ========== PDF ==========
     async function loadPDF(file) {
         const data = await file.arrayBuffer();
         pdfDoc = await pdfjsLib.getDocument({ data }).promise;
@@ -730,7 +834,7 @@
         document.getElementById('slideSidebar').classList.add('open');
     }
 
-    // ==================== MCQ ====================
+    // ========== MCQ ==========
     function wrapText(ctx, text, maxW) {
         const words = text.split(' ');
         const lines = [];
@@ -775,10 +879,7 @@
         y += 12;
         bgCtx.font = `${mcqFontSize + 2}px "Segoe UI"`;
         bgCtx.fillStyle = '#2c3e66';
-        [
-            { l: 'A', t: slide.a }, { l: 'B', t: slide.b },
-            { l: 'C', t: slide.c }, { l: 'D', t: slide.d }
-        ].forEach(opt => {
+        [{ l: 'A', t: slide.a }, { l: 'B', t: slide.b }, { l: 'C', t: slide.c }, { l: 'D', t: slide.d }].forEach(opt => {
             if (!opt.t) return;
             wrapText(bgCtx, `🔘 ${opt.l}) ${opt.t}`, mw - 20).forEach(l => { bgCtx.fillText(l, mx + 15, y); y += mcqFontSize + 12; });
         });
@@ -791,36 +892,27 @@
         if (window.MathJax) MathJax.typesetPromise();
     }
 
-    // ==================== TOOL TOGGLE ====================
+    // ========== TOOL TOGGLE ==========
     function setTool(t) {
-        if (currentTool === t) {
-            currentTool = 'none';
-        } else {
-            currentTool = t;
-        }
-        ['drawBtn','markerBtn','highlighterBtn','eraseBtn','fillBtn','selectBtn','rectBtn','circleBtn','arrowBtn'].forEach(id => {
+        if (currentTool === t) { currentTool = 'none'; }
+        else { currentTool = t; }
+        ['drawBtn','markerBtn','highlighterBtn','eraseBtn','fillBtn','selectBtn','rectBtn','circleBtn','arrowBtn','lineBtn','triangleBtn','diamondBtn'].forEach(id => {
             const btn = document.getElementById(id);
             if (btn) btn.classList.remove('active');
         });
+        const mapping = {
+            'draw': 'drawBtn', 'marker': 'markerBtn', 'highlighter': 'highlighterBtn', 'eraser': 'eraseBtn',
+            'fill': 'fillBtn', 'select': 'selectBtn', 'rect': 'rectBtn', 'circle': 'circleBtn',
+            'arrow': 'arrowBtn', 'line': 'lineBtn', 'triangle': 'triangleBtn', 'diamond': 'diamondBtn'
+        };
         if (currentTool !== 'none') {
-            const mapping = {
-                'draw': 'drawBtn',
-                'marker': 'markerBtn',
-                'highlighter': 'highlighterBtn',
-                'eraser': 'eraseBtn',
-                'fill': 'fillBtn',
-                'select': 'selectBtn',
-                'rect': 'rectBtn',
-                'circle': 'circleBtn',
-                'arrow': 'arrowBtn'
-            };
             const activeId = mapping[currentTool];
             if (activeId) document.getElementById(activeId).classList.add('active');
         }
         redrawAll();
     }
 
-    // ==================== UI BINDINGS ====================
+    // ========== UI BINDINGS ==========
     document.getElementById('toolbarToggleBtn').onclick = () => document.getElementById('toolbarSidebar').classList.toggle('open');
     document.getElementById('toggleSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
     document.getElementById('closeSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.remove('open');
@@ -834,10 +926,18 @@
     document.getElementById('rectBtn').onclick = () => setTool('rect');
     document.getElementById('circleBtn').onclick = () => setTool('circle');
     document.getElementById('arrowBtn').onclick = () => setTool('arrow');
+    document.getElementById('lineBtn').onclick = () => setTool('line');
+    document.getElementById('triangleBtn').onclick = () => setTool('triangle');
+    document.getElementById('diamondBtn').onclick = () => setTool('diamond');
 
     document.getElementById('editToggleBtn').onclick = () => {
         editingEnabled = !editingEnabled;
         document.getElementById('editToggleBtn').classList.toggle('active', editingEnabled);
+        redrawAll();
+    };
+    document.getElementById('vertexEditBtn').onclick = () => {
+        vertexEditEnabled = !vertexEditEnabled;
+        document.getElementById('vertexEditBtn').classList.toggle('active', vertexEditEnabled);
         redrawAll();
     };
     document.getElementById('textBtn').onclick = () => {
@@ -1008,7 +1108,7 @@
         document.getElementById('latexModal').style.display = 'none';
     };
 
-    // ==================== PINCH ZOOM & PAN ====================
+    // ========== PINCH ZOOM & PAN ==========
     let initialPinchDist = 0, initialScale = 1, pinchCenter = null;
     bottomCanvas.addEventListener('touchstart', e => {
         if (e.touches.length === 2) {
@@ -1079,7 +1179,7 @@
     window.addEventListener('mouseup', () => { isPanning = false; });
     bottomCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ==================== POINTER EVENTS ====================
+    // ========== POINTER EVENTS ==========
     bottomCanvas.addEventListener('mousedown', handleDown);
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
@@ -1087,13 +1187,13 @@
     bottomCanvas.addEventListener('touchmove', e => { if (e.touches.length === 1) handleMove(e); }, { passive: false });
     bottomCanvas.addEventListener('touchend', handleUp);
 
-    // ==================== INIT ====================
+    // ========== INIT ==========
     setCanvasSize(1200, 800);
     bgCtx.fillStyle = 'white';
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Whiteboard ready – edit mode now allows moving objects and resizing with larger handles.');
+    console.log('✅ Whiteboard fully loaded with all features.');
 </script>
 </body>
 </html>
