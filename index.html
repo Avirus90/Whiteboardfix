@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard – Vertex Edit Fixed</title>
+    <title>Whiteboard – Full Vertex Edit (Complete)</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -200,7 +200,7 @@
             <div class="card-header">✍️ INTERACTIVE CANVAS</div>
             <div class="canvas-container" id="bottomContainer">
                 <canvas id="bottomCanvas"></canvas>
-                <div class="status" id="bottomStatus">Zoom: 1.0x | 2‑finger pinch/pan</div>
+                <div class="status" id="bottomStatus">Zoom: 1.0x</div>
             </div>
         </div>
     </div>
@@ -242,53 +242,31 @@
     let penColor = '#000000';
     let penSize = 4;
     let opacity = 1;
-    let scale = 1;
-    let offsetX = 0;
-    let offsetY = 0;
+    let scale = 1, offsetX = 0, offsetY = 0;
 
-    let pdfDoc = null;
-    let pdfPages = [];
-    let currentPageNum = 1;
-    let totalPages = 0;
-
-    let slides = [];
-    let currentSlide = 0;
-    let mcqFontSize = 26;
-
+    let pdfDoc = null, pdfPages = [], currentPageNum = 1, totalPages = 0;
+    let slides = [], currentSlide = 0, mcqFontSize = 26;
     let objects = [];
     let editingEnabled = false;
     let vertexEditEnabled = false;
     let selectedObjectIndex = -1;
-
-    let history = [];
-    let historyIndex = -1;
+    let history = [], historyIndex = -1;
 
     // Drawing state
-    let drawing = false;
-    let lastX = 0, lastY = 0;
-    let smoothPoints = [];
-    let shapeStart = null;
-    let currentShapeType = null;
+    let drawing = false, lastX = 0, lastY = 0, smoothPoints = [];
+    let shapeStart = null, currentShapeType = null;
 
     // Object interaction
-    let isDraggingObject = false;
-    let dragStartX = 0, dragStartY = 0;
-    let dragOrigObj = null;
-    let isResizing = false;
-    let resizeHandle = null;
-    let resizeStartBounds = null;
-    let isRotating = false;
-    let rotateStartAngle = 0;
-    let isDraggingVertex = false;
-    let vertexIndex = -1;
+    let isDraggingObject = false, dragStartX = 0, dragStartY = 0, dragOrigObj = null;
+    let isResizing = false, resizeHandle = null, resizeStartBounds = null;
+    let isRotating = false, rotateStartAngle = 0;
+    let isDraggingVertex = false, vertexIndex = -1;
 
     // ========== CANVAS SETUP ==========
     function setCanvasSize(w, h) {
         [topCanvas, bottomCanvas, bgCanvas, drawLayer].forEach(c => { c.width = w; c.height = h; });
         drawCtx.clearRect(0, 0, w, h);
-        scale = 1;
-        offsetX = 0;
-        offsetY = 0;
+        scale = 1; offsetX = 0; offsetY = 0;
         redrawAll();
     }
 
@@ -316,24 +294,39 @@
     function getObjectPoints(obj) {
         if (obj.points) return obj.points;
         if (obj.type === 'rect') {
-            const { x, y, w, h } = obj;
-            return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
+            const {x, y, w, h} = obj;
+            return [{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];
         }
         if (obj.type === 'circle') {
             const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
-            return [{ x: cx, y: cy - ry }, { x: cx + rx, y: cy }, { x: cx, y: cy + ry }, { x: cx - rx, y: cy }];
+            return [{x:cx, y:cy-ry},{x:cx+rx, y:cy},{x:cx, y:cy+ry},{x:cx-rx, y:cy}];
         }
         if (obj.type === 'arrow' || obj.type === 'line') {
-            return [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
+            return [{x:obj.x1, y:obj.y1},{x:obj.x2, y:obj.y2}];
         }
         if (obj.type === 'triangle') {
-            return obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+            return obj.points || [{x:obj.x1,y:obj.y1},{x:obj.x2,y:obj.y2},{x:obj.x3,y:obj.y3}];
         }
         if (obj.type === 'diamond') {
             const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
-            return [{ x: cx, y: cy - ry }, { x: cx + rx, y: cy }, { x: cx, y: cy + ry }, { x: cx - rx, y: cy }];
+            return [{x:cx, y:cy-ry},{x:cx+rx, y:cy},{x:cx, y:cy+ry},{x:cx-rx, y:cy}];
         }
         return [];
+    }
+
+    function convertToPolygon(obj) {
+        if (obj.type === 'polygon') return;
+        const pts = getObjectPoints(obj);
+        obj.type = 'polygon';
+        obj.points = pts.map(p => ({x:p.x, y:p.y}));
+        // remove old shape‑specific properties
+        delete obj.x; delete obj.y; delete obj.w; delete obj.h;
+        delete obj.cx; delete obj.cy; delete obj.rx; delete obj.ry;
+        delete obj.x1; delete obj.y1; delete obj.x2; delete obj.y2;
+        delete obj.x3; delete obj.y3;
+        obj.rotation = 0;
+        obj.flipH = false;
+        obj.flipV = false;
     }
 
     function getObjectBounds(obj) {
@@ -343,33 +336,34 @@
                 minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
                 maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
             });
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rotation: 0 };
+            return {x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2, rotation:0};
         }
-        if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2, rotation: obj.rotation || 0 };
-        if (obj.type === 'circle') return { x: obj.cx - obj.rx, y: obj.cy - obj.ry, w: obj.rx * 2, h: obj.ry * 2, cx: obj.cx, cy: obj.cy, rotation: obj.rotation || 0 };
+        if (obj.type === 'rect') return {x:obj.x, y:obj.y, w:obj.w, h:obj.h, cx:obj.x+obj.w/2, cy:obj.y+obj.h/2, rotation:obj.rotation||0};
+        if (obj.type === 'circle') return {x:obj.cx-obj.rx, y:obj.cy-obj.ry, w:obj.rx*2, h:obj.ry*2, cx:obj.cx, cy:obj.cy, rotation:obj.rotation||0};
         if (obj.type === 'arrow' || obj.type === 'line') {
-            const minX = Math.min(obj.x1, obj.x2), maxX = Math.max(obj.x1, obj.x2), minY = Math.min(obj.y1, obj.y2), maxY = Math.max(obj.y1, obj.y2);
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rotation: 0 };
+            const minX = Math.min(obj.x1,obj.x2), maxX = Math.max(obj.x1,obj.x2);
+            const minY = Math.min(obj.y1,obj.y2), maxY = Math.max(obj.y1,obj.y2);
+            return {x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2, rotation:0};
         }
         if (obj.type === 'triangle') {
-            const pts = obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            pts.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, rotation: 0 };
+            const pts = obj.points || [{x:obj.x1,y:obj.y1},{x:obj.x2,y:obj.y2},{x:obj.x3,y:obj.y3}];
+            let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+            pts.forEach(p=>{minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);});
+            return {x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2, rotation:0};
         }
         if (obj.type === 'diamond') {
-            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
-            return { x: cx - rx, y: cy - ry, w: rx * 2, h: ry * 2, cx, cy, rotation: obj.rotation || 0 };
+            const cx=obj.cx, cy=obj.cy, rx=obj.rx, ry=obj.ry;
+            return {x:cx-rx, y:cy-ry, w:rx*2, h:ry*2, cx, cy, rotation:obj.rotation||0};
         }
-        if (obj.type === 'image' || obj.type === 'latex') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2, rotation: obj.rotation || 0 };
-        if (obj.type === 'text') return { x: obj.x, y: obj.y, w: obj.w || 100, h: obj.h || 30, cx: obj.x + (obj.w || 100) / 2, cy: obj.y + (obj.h || 30) / 2, rotation: obj.rotation || 0 };
-        return { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0, rotation: 0 };
+        if (obj.type === 'image' || obj.type === 'latex') return {x:obj.x, y:obj.y, w:obj.w, h:obj.h, cx:obj.x+obj.w/2, cy:obj.y+obj.h/2, rotation:obj.rotation||0};
+        if (obj.type === 'text') return {x:obj.x, y:obj.y, w:obj.w||100, h:obj.h||30, cx:obj.x+(obj.w||100)/2, cy:obj.y+(obj.h||30)/2, rotation:obj.rotation||0};
+        return {x:0,y:0,w:0,h:0,cx:0,cy:0,rotation:0};
     }
 
     function hitTestObject(px, py) {
-        for (let i = objects.length - 1; i >= 0; i--) {
+        for (let i = objects.length-1; i >= 0; i--) {
             const b = getObjectBounds(objects[i]);
-            if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            if (px >= b.x && px <= b.x+b.w && py >= b.y && py <= b.y+b.h) return i;
         }
         return -1;
     }
@@ -384,28 +378,34 @@
         if (obj.type === 'rect') {
             ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke();
         } else if (obj.type === 'circle') {
-            ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2 * Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2*Math.PI); ctx.stroke();
         } else if (obj.type === 'arrow') {
             ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2);
-            const angle = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
-            const sz = Math.min(20, Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * 0.25);
+            const angle = Math.atan2(obj.y2-obj.y1, obj.x2-obj.x1);
+            const sz = Math.min(20, Math.hypot(obj.x2-obj.x1, obj.y2-obj.y1)*0.25);
             ctx.moveTo(obj.x2, obj.y2);
-            ctx.lineTo(obj.x2 - sz * Math.cos(angle - Math.PI / 6), obj.y2 - sz * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(obj.x2-sz*Math.cos(angle-Math.PI/6), obj.y2-sz*Math.sin(angle-Math.PI/6));
             ctx.moveTo(obj.x2, obj.y2);
-            ctx.lineTo(obj.x2 - sz * Math.cos(angle + Math.PI / 6), obj.y2 - sz * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(obj.x2-sz*Math.cos(angle+Math.PI/6), obj.y2-sz*Math.sin(angle+Math.PI/6));
             ctx.stroke();
         } else if (obj.type === 'line') {
             ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         } else if (obj.type === 'triangle') {
-            const pts = obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+            const pts = obj.points || [{x:obj.x1,y:obj.y1},{x:obj.x2,y:obj.y2},{x:obj.x3,y:obj.y3}];
             ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.closePath(); ctx.stroke();
         } else if (obj.type === 'diamond') {
-            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
-            ctx.beginPath(); ctx.moveTo(cx, cy - ry); ctx.lineTo(cx + rx, cy); ctx.lineTo(cx, cy + ry); ctx.lineTo(cx - rx, cy); ctx.closePath(); ctx.stroke();
+            const cx=obj.cx, cy=obj.cy, rx=obj.rx, ry=obj.ry;
+            ctx.beginPath(); ctx.moveTo(cx, cy-ry); ctx.lineTo(cx+rx, cy); ctx.lineTo(cx, cy+ry); ctx.lineTo(cx-rx, cy); ctx.closePath(); ctx.stroke();
+        } else if (obj.type === 'polygon') {
+            if (obj.points && obj.points.length > 2) {
+                ctx.beginPath(); ctx.moveTo(obj.points[0].x, obj.points[0].y);
+                for (let i=1; i<obj.points.length; i++) ctx.lineTo(obj.points[i].x, obj.points[i].y);
+                ctx.closePath(); ctx.stroke();
+            }
         } else if (obj.type === 'image' || obj.type === 'latex') {
             if (obj.img && obj.img.complete) ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
         } else if (obj.type === 'text') {
-            ctx.font = `${obj.fontSize || 20}px "Segoe UI"`;
+            ctx.font = `${obj.fontSize||20}px "Segoe UI"`;
             ctx.fillStyle = obj.color || penColor;
             ctx.fillText(obj.text, obj.x, obj.y);
         }
@@ -413,62 +413,61 @@
     }
 
     function drawSelectionHandles(ctx, obj) {
-        if (vertexEditEnabled && (obj.type !== 'image' && obj.type !== 'latex' && obj.type !== 'text')) {
+        if (vertexEditEnabled && obj.type !== 'image' && obj.type !== 'latex' && obj.type !== 'text') {
             const pts = getObjectPoints(obj);
-            ctx.fillStyle = '#00ff88';
+            const vertexRadius = Math.max(12/scale, 20);  // large handles for touch
+            ctx.fillStyle = '#00bbff';
             ctx.strokeStyle = '#000';
-            const vertexRadius = Math.max(10 / scale, 16); // bigger and easier to grab
             pts.forEach(p => {
-                ctx.beginPath(); ctx.arc(p.x, p.y, vertexRadius, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.arc(p.x, p.y, vertexRadius, 0, 2*Math.PI);
+                ctx.fill(); ctx.stroke();
             });
             return;
         }
         const b = getObjectBounds(obj);
         ctx.save();
         ctx.strokeStyle = '#ffd700';
-        ctx.lineWidth = 2.5 / scale;
-        ctx.setLineDash([8 / scale, 5 / scale]);
+        ctx.lineWidth = 2.5/scale;
+        ctx.setLineDash([8/scale, 5/scale]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
         ctx.setLineDash([]);
-        const hSize = Math.max(12 / scale, 14);
+        const hSize = Math.max(12/scale, 14);
         if (obj.type === 'arrow' || obj.type === 'line') {
             ctx.fillStyle = '#ffd700';
-            [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }].forEach(({ x, y }) => ctx.fillRect(x - hSize / 2, y - hSize / 2, hSize, hSize));
+            [{x:obj.x1,y:obj.y1},{x:obj.x2,y:obj.y2}].forEach(({x,y}) => ctx.fillRect(x-hSize/2, y-hSize/2, hSize, hSize));
         } else {
             ctx.fillStyle = '#ffd700';
-            [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => ctx.fillRect(cx - hSize / 2, cy - hSize / 2, hSize, hSize));
+            [[b.x,b.y],[b.x+b.w,b.y],[b.x,b.y+b.h],[b.x+b.w,b.y+b.h]].forEach(([cx,cy]) => ctx.fillRect(cx-hSize/2, cy-hSize/2, hSize, hSize));
         }
         ctx.fillStyle = '#e74c3c';
-        ctx.beginPath();
-        ctx.arc(b.x + b.w / 2, b.y - 22 / scale, hSize / 1.5, 0, 2 * Math.PI);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x+b.w/2, b.y-22/scale, hSize/1.5, 0, 2*Math.PI); ctx.fill();
         ctx.restore();
     }
 
     function redrawAll() {
-        bottomCtx.setTransform(1, 0, 0, 1, 0, 0);
-        bottomCtx.clearRect(0, 0, bottomCanvas.width, bottomCanvas.height);
-        topCtx.setTransform(1, 0, 0, 1, 0, 0);
-        topCtx.clearRect(0, 0, topCanvas.width, topCanvas.height);
+        bottomCtx.setTransform(1,0,0,1,0,0);
+        bottomCtx.clearRect(0,0,bottomCanvas.width,bottomCanvas.height);
+        topCtx.setTransform(1,0,0,1,0,0);
+        topCtx.clearRect(0,0,topCanvas.width,topCanvas.height);
 
-        bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-        bottomCtx.drawImage(bgCanvas, 0, 0);
-        bottomCtx.drawImage(drawLayer, 0, 0);
+        bottomCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
+        bottomCtx.drawImage(bgCanvas,0,0);
+        bottomCtx.drawImage(drawLayer,0,0);
         objects.forEach(obj => drawObject(bottomCtx, obj));
-        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+        if (editingEnabled && selectedObjectIndex>=0 && objects[selectedObjectIndex]) {
             drawSelectionHandles(bottomCtx, objects[selectedObjectIndex]);
         }
 
-        topCtx.drawImage(bgCanvas, 0, 0);
-        topCtx.drawImage(drawLayer, 0, 0);
+        topCtx.drawImage(bgCanvas,0,0);
+        topCtx.drawImage(drawLayer,0,0);
         objects.forEach(obj => drawObject(topCtx, obj));
-        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+        if (editingEnabled && selectedObjectIndex>=0 && objects[selectedObjectIndex]) {
             drawSelectionHandles(topCtx, objects[selectedObjectIndex]);
         }
 
         document.getElementById('bottomStatus').innerHTML =
-            `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | ${editingEnabled ? '🔧 Edit' : '✏️ Draw'} ${vertexEditEnabled ? ' | Vertex' : ''}`;
-        document.getElementById('objectActionGroup').style.display = (editingEnabled && selectedObjectIndex >= 0) ? 'flex' : 'none';
+            `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | ${editingEnabled?'🔧 Edit':''} ${vertexEditEnabled?'✏️ Vertex':''}`;
+        document.getElementById('objectActionGroup').style.display = (editingEnabled && selectedObjectIndex>=0) ? 'flex' : 'none';
     }
 
     // ========== HISTORY ==========
@@ -482,18 +481,18 @@
                 return copy;
             })
         };
-        if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
+        if (historyIndex < history.length-1) history = history.slice(0, historyIndex+1);
         history.push(state);
-        historyIndex = history.length - 1;
+        historyIndex = history.length-1;
         if (history.length > 30) { history.shift(); historyIndex--; }
     }
 
     function restoreHistory(state) {
         const i1 = new Image();
-        i1.onload = () => { drawCtx.clearRect(0, 0, drawLayer.width, drawLayer.height); drawCtx.drawImage(i1, 0, 0); redrawAll(); };
+        i1.onload = () => { drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height); drawCtx.drawImage(i1,0,0); redrawAll(); };
         i1.src = state.drawData;
         const i2 = new Image();
-        i2.onload = () => { bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.drawImage(i2, 0, 0); redrawAll(); };
+        i2.onload = () => { bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height); bgCtx.drawImage(i2,0,0); redrawAll(); };
         i2.src = state.bgData;
         objects = state.objects.map(o => {
             if (o.imgSrc) { const img = new Image(); img.src = o.imgSrc; return { ...o, img }; }
@@ -504,7 +503,7 @@
     }
 
     function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(history[historyIndex]); } }
-    function redo() { if (historyIndex < history.length - 1) { historyIndex++; restoreHistory(history[historyIndex]); } }
+    function redo() { if (historyIndex < history.length-1) { historyIndex++; restoreHistory(history[historyIndex]); } }
 
     // ========== COORDINATE HELPERS ==========
     function getCanvasCoords(e) {
@@ -526,14 +525,16 @@
         if (currentTool === 'none') return;
         const p = getCanvasCoords(e);
 
+        // Vertex edit mode active
         if (editingEnabled && vertexEditEnabled && selectedObjectIndex >= 0) {
             const obj = objects[selectedObjectIndex];
             const pts = getObjectPoints(obj);
-            const hSize = Math.max(12 / scale, 18); // larger hit area
+            const hitRadius = Math.max(14/scale, 22);
             for (let i = 0; i < pts.length; i++) {
-                if (Math.hypot(p.x - pts[i].x, p.y - pts[i].y) < hSize) {
+                if (Math.hypot(p.x - pts[i].x, p.y - pts[i].y) < hitRadius) {
                     isDraggingVertex = true;
                     vertexIndex = i;
+                    if (obj.type !== 'polygon') convertToPolygon(obj);
                     return;
                 }
             }
@@ -568,27 +569,27 @@
             if (selectedObjectIndex >= 0) {
                 const obj = objects[selectedObjectIndex];
                 const b = getObjectBounds(obj);
-                const hSize = Math.max(12 / scale, 14);
-                if (Math.hypot(p.x - (b.x + b.w / 2), p.y - (b.y - 22 / scale)) < hSize * 1.2) {
+                const hSize = Math.max(12/scale, 14);
+                if (Math.hypot(p.x-(b.x+b.w/2), p.y-(b.y-22/scale)) < hSize*1.2) {
                     isRotating = true;
-                    rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+                    rotateStartAngle = Math.atan2(p.y-b.cy, p.x-b.cx);
                     return;
                 }
                 if (obj.type === 'arrow' || obj.type === 'line') {
-                    const handles = [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
-                    for (let i = 0; i < 2; i++) {
-                        if (Math.abs(p.x - handles[i].x) < hSize && Math.abs(p.y - handles[i].y) < hSize) {
+                    const handles = [{x:obj.x1,y:obj.y1},{x:obj.x2,y:obj.y2}];
+                    for (let i=0; i<2; i++) {
+                        if (Math.abs(p.x-handles[i].x)<hSize && Math.abs(p.y-handles[i].y)<hSize) {
                             isResizing = true;
                             resizeHandle = i;
-                            resizeStartBounds = { ...b, x1: obj.x1, y1: obj.y1, x2: obj.x2, y2: obj.y2 };
+                            resizeStartBounds = { ...b, x1:obj.x1, y1:obj.y1, x2:obj.x2, y2:obj.y2 };
                             dragStartX = p.x; dragStartY = p.y;
                             return;
                         }
                     }
                 } else {
-                    const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
-                    for (let i = 0; i < 4; i++) {
-                        if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
+                    const corners = [[b.x,b.y],[b.x+b.w,b.y],[b.x,b.y+b.h],[b.x+b.w,b.y+b.h]];
+                    for (let i=0; i<4; i++) {
+                        if (Math.abs(p.x-corners[i][0])<hSize && Math.abs(p.y-corners[i][1])<hSize) {
                             isResizing = true;
                             resizeHandle = i;
                             resizeStartBounds = { ...b };
@@ -606,19 +607,20 @@
                 }
             }
             const hit = hitTestObject(p.x, p.y);
-            if (hit >= 0) { selectedObjectIndex = hit; redrawAll(); } else { selectedObjectIndex = -1; redrawAll(); }
+            if (hit >= 0) { selectedObjectIndex = hit; redrawAll(); }
+            else { selectedObjectIndex = -1; redrawAll(); }
             return;
         }
 
         if (currentTool === 'fill') { floodFill(Math.round(p.x), Math.round(p.y)); return; }
-        if (['rect', 'circle', 'arrow', 'line', 'triangle', 'diamond'].includes(currentTool)) {
+        if (['rect','circle','arrow','line','triangle','diamond'].includes(currentTool)) {
             shapeStart = p;
             currentShapeType = currentTool;
             drawing = true;
             return;
         }
         drawing = true;
-        smoothPoints = [{ x: p.x, y: p.y }];
+        smoothPoints = [{x:p.x, y:p.y}];
         lastX = p.x; lastY = p.y;
         saveHistory();
     }
@@ -627,44 +629,20 @@
         if (isDraggingVertex && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const obj = objects[selectedObjectIndex];
-            if (obj.points) {
-                obj.points[vertexIndex].x = p.x; obj.points[vertexIndex].y = p.y;
-            } else if (obj.type === 'rect') {
-                const pts = getObjectPoints(obj);
-                pts[vertexIndex].x = p.x; pts[vertexIndex].y = p.y;
-                const minX = Math.min(...pts.map(p => p.x)), minY = Math.min(...pts.map(p => p.y));
-                const maxX = Math.max(...pts.map(p => p.x)), maxY = Math.max(...pts.map(p => p.y));
-                obj.x = minX; obj.y = minY; obj.w = maxX - minX; obj.h = maxY - minY;
-            } else if (obj.type === 'circle') {
-                const pts = getObjectPoints(obj);
-                pts[vertexIndex].x = p.x; pts[vertexIndex].y = p.y;
-                const cx = (pts[0].x + pts[2].x) / 2, cy = (pts[1].y + pts[3].y) / 2;
-                obj.cx = cx; obj.cy = cy;
-                obj.rx = Math.max(5, Math.hypot(pts[1].x - cx, pts[1].y - cy));
-                obj.ry = Math.max(5, Math.hypot(pts[0].x - cx, pts[0].y - cy));
-            } else if (obj.type === 'arrow' || obj.type === 'line') {
-                if (vertexIndex === 0) { obj.x1 = p.x; obj.y1 = p.y; } else { obj.x2 = p.x; obj.y2 = p.y; }
-            } else if (obj.type === 'triangle') {
-                if (!obj.points) obj.points = [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
-                obj.points[vertexIndex] = { x: p.x, y: p.y };
-            } else if (obj.type === 'diamond') {
-                const pts = getObjectPoints(obj);
-                pts[vertexIndex].x = p.x; pts[vertexIndex].y = p.y;
-                const cx = (pts[0].x + pts[2].x) / 2, cy = (pts[1].y + pts[3].y) / 2;
-                obj.cx = cx; obj.cy = cy;
-                obj.rx = Math.max(5, Math.abs(pts[1].x - cx));
-                obj.ry = Math.max(5, Math.abs(pts[0].y - cy));
+            if (obj.points && vertexIndex < obj.points.length) {
+                obj.points[vertexIndex].x = p.x;
+                obj.points[vertexIndex].y = p.y;
+                redrawAll();
             }
-            redrawAll();
             return;
         }
         if (isRotating && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const obj = objects[selectedObjectIndex];
             const b = getObjectBounds(obj);
-            const newAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+            const newAngle = Math.atan2(p.y-b.cy, p.x-b.cx);
             const delta = ((newAngle - rotateStartAngle) * 180) / Math.PI;
-            obj.rotation = (obj.rotation || 0) + delta;
+            obj.rotation = (obj.rotation||0) + delta;
             rotateStartAngle = newAngle;
             redrawAll();
             return;
@@ -677,11 +655,11 @@
             } else {
                 const dx = p.x - dragStartX, dy = p.y - dragStartY;
                 const orig = resizeStartBounds;
-                if (resizeHandle === 0) { obj.x = orig.x + dx; obj.y = orig.y + dy; obj.w = orig.w - dx; obj.h = orig.h - dy; }
-                else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
-                else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
-                else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
-                if (obj.type === 'circle') { obj.rx = obj.w / 2; obj.ry = obj.h / 2; obj.cx = obj.x + obj.rx; obj.cy = obj.y + obj.ry; }
+                if (resizeHandle === 0) { obj.x = orig.x+dx; obj.y = orig.y+dy; obj.w = orig.w-dx; obj.h = orig.h-dy; }
+                else if (resizeHandle === 1) { obj.y = orig.y+dy; obj.w = orig.w+dx; obj.h = orig.h-dy; }
+                else if (resizeHandle === 2) { obj.x = orig.x+dx; obj.w = orig.w-dx; obj.h = orig.h+dy; }
+                else if (resizeHandle === 3) { obj.w = orig.w+dx; obj.h = orig.h+dy; }
+                if (obj.type === 'circle') { obj.rx = obj.w/2; obj.ry = obj.h/2; obj.cx = obj.x+obj.rx; obj.cy = obj.y+obj.ry; }
             }
             redrawAll();
             return;
@@ -697,8 +675,10 @@
             } else if (obj.type === 'arrow' || obj.type === 'line') {
                 obj.x1 = dragOrigObj.x1 + dx; obj.y1 = dragOrigObj.y1 + dy;
                 obj.x2 = dragOrigObj.x2 + dx; obj.y2 = dragOrigObj.y2 + dy;
-            } else if (obj.type === 'triangle' || obj.type === 'diamond') {
-                if (obj.points) obj.points = dragOrigObj.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+            } else if (obj.type === 'triangle' || obj.type === 'diamond' || obj.type === 'polygon') {
+                if (obj.points) {
+                    obj.points = dragOrigObj.points.map(p => ({x:p.x + dx, y:p.y + dy}));
+                }
             }
             redrawAll();
             return;
@@ -710,24 +690,24 @@
             redrawAll();
             bottomCtx.save();
             setBrush(bottomCtx);
-            if (currentShapeType === 'rect') bottomCtx.strokeRect(shapeStart.x, shapeStart.y, p.x - shapeStart.x, p.y - shapeStart.y);
+            if (currentShapeType === 'rect') bottomCtx.strokeRect(shapeStart.x, shapeStart.y, p.x-shapeStart.x, p.y-shapeStart.y);
             else if (currentShapeType === 'circle') {
-                const rx = Math.abs(p.x - shapeStart.x) / 2, ry = Math.abs(p.y - shapeStart.y) / 2;
-                bottomCtx.beginPath(); bottomCtx.ellipse(shapeStart.x + rx, shapeStart.y + ry, rx, ry, 0, 0, 2 * Math.PI); bottomCtx.stroke();
+                const rx = Math.abs(p.x-shapeStart.x)/2, ry = Math.abs(p.y-shapeStart.y)/2;
+                bottomCtx.beginPath(); bottomCtx.ellipse(shapeStart.x+rx, shapeStart.y+ry, rx, ry, 0,0,2*Math.PI); bottomCtx.stroke();
             } else if (currentShapeType === 'arrow' || currentShapeType === 'line') {
                 bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.stroke();
             } else if (currentShapeType === 'triangle') {
-                const midX = (shapeStart.x + p.x) / 2;
-                bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.lineTo(midX, shapeStart.y - 50); bottomCtx.closePath(); bottomCtx.stroke();
+                const midX = (shapeStart.x+p.x)/2;
+                bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.lineTo(midX, shapeStart.y-50); bottomCtx.closePath(); bottomCtx.stroke();
             } else if (currentShapeType === 'diamond') {
-                const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2, rx = Math.abs(p.x - shapeStart.x) / 2, ry = Math.abs(p.y - shapeStart.y) / 2;
-                bottomCtx.beginPath(); bottomCtx.moveTo(cx, cy - ry); bottomCtx.lineTo(cx + rx, cy); bottomCtx.lineTo(cx, cy + ry); bottomCtx.lineTo(cx - rx, cy); bottomCtx.closePath(); bottomCtx.stroke();
+                const cx = (shapeStart.x+p.x)/2, cy = (shapeStart.y+p.y)/2, rx = Math.abs(p.x-shapeStart.x)/2, ry = Math.abs(p.y-shapeStart.y)/2;
+                bottomCtx.beginPath(); bottomCtx.moveTo(cx, cy-ry); bottomCtx.lineTo(cx+rx, cy); bottomCtx.lineTo(cx, cy+ry); bottomCtx.lineTo(cx-rx, cy); bottomCtx.closePath(); bottomCtx.stroke();
             }
             bottomCtx.restore();
             return;
         }
-        if (smoothPoints.length > 0 && Math.hypot(p.x - lastX, p.y - lastY) > 1) {
-            smoothPoints.push({ x: p.x, y: p.y });
+        if (smoothPoints.length > 0 && Math.hypot(p.x-lastX, p.y-lastY) > 1) {
+            smoothPoints.push({x:p.x, y:p.y});
             if (smoothPoints.length > 3) smoothPoints.shift();
             drawSmoothLine(smoothPoints);
             lastX = p.x; lastY = p.y;
@@ -742,14 +722,16 @@
         e.preventDefault();
         if (currentShapeType && shapeStart) {
             const p = getCanvasCoords(e);
-            if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) < 5) { currentShapeType = null; shapeStart = null; drawing = false; redrawAll(); return; }
-            const obj = { strokeStyle: penColor, lineWidth: penSize, opacity, rotation: 0, flipH: false, flipV: false };
-            if (currentShapeType === 'rect') { obj.type = 'rect'; obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(p.x - shapeStart.x); obj.h = Math.abs(p.y - shapeStart.y); }
-            else if (currentShapeType === 'circle') { const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2; obj.type = 'circle'; obj.cx = cx; obj.cy = cy; obj.rx = Math.abs(p.x - shapeStart.x) / 2; obj.ry = Math.abs(p.y - shapeStart.y) / 2; }
-            else if (currentShapeType === 'arrow') { obj.type = 'arrow'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
-            else if (currentShapeType === 'line') { obj.type = 'line'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
-            else if (currentShapeType === 'triangle') { const midX = (shapeStart.x + p.x) / 2; obj.type = 'triangle'; obj.points = [{ x: shapeStart.x, y: shapeStart.y }, { x: p.x, y: p.y }, { x: midX, y: shapeStart.y - 50 }]; }
-            else if (currentShapeType === 'diamond') { const cx = (shapeStart.x + p.x) / 2, cy = (shapeStart.y + p.y) / 2, rx = Math.abs(p.x - shapeStart.x) / 2, ry = Math.abs(p.y - shapeStart.y) / 2; obj.type = 'diamond'; obj.cx = cx; obj.cy = cy; obj.rx = rx; obj.ry = ry; }
+            if (Math.hypot(p.x-shapeStart.x, p.y-shapeStart.y) < 5) {
+                currentShapeType = null; shapeStart = null; drawing = false; redrawAll(); return;
+            }
+            const obj = { strokeStyle:penColor, lineWidth:penSize, opacity, rotation:0, flipH:false, flipV:false };
+            if (currentShapeType === 'rect') { obj.type='rect'; obj.x=Math.min(shapeStart.x,p.x); obj.y=Math.min(shapeStart.y,p.y); obj.w=Math.abs(p.x-shapeStart.x); obj.h=Math.abs(p.y-shapeStart.y); }
+            else if (currentShapeType === 'circle') { const cx=(shapeStart.x+p.x)/2, cy=(shapeStart.y+p.y)/2; obj.type='circle'; obj.cx=cx; obj.cy=cy; obj.rx=Math.abs(p.x-shapeStart.x)/2; obj.ry=Math.abs(p.y-shapeStart.y)/2; }
+            else if (currentShapeType === 'arrow') { obj.type='arrow'; obj.x1=shapeStart.x; obj.y1=shapeStart.y; obj.x2=p.x; obj.y2=p.y; }
+            else if (currentShapeType === 'line') { obj.type='line'; obj.x1=shapeStart.x; obj.y1=shapeStart.y; obj.x2=p.x; obj.y2=p.y; }
+            else if (currentShapeType === 'triangle') { const midX=(shapeStart.x+p.x)/2; obj.type='triangle'; obj.points=[{x:shapeStart.x,y:shapeStart.y},{x:p.x,y:p.y},{x:midX,y:shapeStart.y-50}]; }
+            else if (currentShapeType === 'diamond') { const cx=(shapeStart.x+p.x)/2, cy=(shapeStart.y+p.y)/2, rx=Math.abs(p.x-shapeStart.x)/2, ry=Math.abs(p.y-shapeStart.y)/2; obj.type='diamond'; obj.cx=cx; obj.cy=cy; obj.rx=rx; obj.ry=ry; }
             objects.push(obj);
             currentShapeType = null; shapeStart = null; drawing = false;
             redrawAll(); saveHistory();
@@ -764,12 +746,12 @@
         setBrush(drawCtx);
         drawCtx.beginPath();
         drawCtx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length - 1; i++) {
-            const xc = (points[i].x + points[i + 1].x) / 2;
-            const yc = (points[i].y + points[i + 1].y) / 2;
+        for (let i = 1; i < points.length-1; i++) {
+            const xc = (points[i].x + points[i+1].x) / 2;
+            const yc = (points[i].y + points[i+1].y) / 2;
             drawCtx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
         }
-        drawCtx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+        drawCtx.lineTo(points[points.length-1].x, points[points.length-1].y);
         drawCtx.stroke();
         drawCtx.restore();
         redrawAll();
@@ -787,18 +769,18 @@
             if (px < 0 || py < 0 || px >= drawLayer.width || py >= drawLayer.height) continue;
             if (!colorMatch(getPixel(imgData, px, py), target)) continue;
             const i = (py * drawLayer.width + px) * 4;
-            imgData.data[i] = fillRGB.r; imgData.data[i + 1] = fillRGB.g; imgData.data[i + 2] = fillRGB.b; imgData.data[i + 3] = 255;
-            stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1]);
+            imgData.data[i] = fillRGB.r; imgData.data[i+1] = fillRGB.g; imgData.data[i+2] = fillRGB.b; imgData.data[i+3] = 255;
+            stack.push([px+1, py], [px-1, py], [px, py+1], [px, py-1]);
         }
         drawCtx.putImageData(imgData, 0, 0);
         redrawAll();
         saveHistory();
     }
-    function getPixel(d, x, y) { const i = (y * d.width + x) * 4; return { r: d.data[i], g: d.data[i + 1], b: d.data[i + 2] }; }
-    function colorMatch(c1, c2) { return Math.abs(c1.r - c2.r) < 10 && Math.abs(c1.g - c2.g) < 10 && Math.abs(c1.b - c2.b) < 10; }
-    function hexToRgb(h) { return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) }; }
+    function getPixel(d, x, y) { const i = (y * d.width + x) * 4; return { r:d.data[i], g:d.data[i+1], b:d.data[i+2] }; }
+    function colorMatch(c1, c2) { return Math.abs(c1.r-c2.r)<10 && Math.abs(c1.g-c2.g)<10 && Math.abs(c1.b-c2.b)<10; }
+    function hexToRgb(h) { return { r:parseInt(h.slice(1,3),16), g:parseInt(h.slice(3,5),16), b:parseInt(h.slice(5,7),16) }; }
 
-    // ========== PDF ==========
+    // ========== PDF HANDLING ==========
     async function loadPDF(file) {
         const data = await file.arrayBuffer();
         pdfDoc = await pdfjsLib.getDocument({ data }).promise;
@@ -812,8 +794,8 @@
         saveHistory();
     }
     async function renderPDFPage(num) {
-        const page = pdfPages[num - 1];
-        const viewport = page.getViewport({ scale: 2.5 });
+        const page = pdfPages[num-1];
+        const viewport = page.getViewport({ scale:2.5 });
         setCanvasSize(viewport.width, viewport.height);
         bgCtx.fillStyle = 'white';
         bgCtx.fillRect(0, 0, viewport.width, viewport.height);
@@ -835,7 +817,7 @@
         document.getElementById('slideSidebar').classList.add('open');
     }
 
-    // ========== MCQ ==========
+    // ========== MCQ HANDLING ==========
     function wrapText(ctx, text, maxW) {
         const words = text.split(' ');
         const lines = [];
@@ -853,7 +835,7 @@
         const blocks = content.split(/###/g);
         for (const block of blocks) {
             if (!block.trim()) continue;
-            const slide = { q: '', a: '', b: '', c: '', d: '', ans: '' };
+            const slide = { q:'', a:'', b:'', c:'', d:'', ans:'' };
             block.split(/\r?\n/).forEach(line => {
                 line = line.trim();
                 if (line.startsWith('|Q|')) slide.q = line.substring(3).trim();
@@ -876,18 +858,18 @@
         bgCtx.fillStyle = '#1a237e';
         const qf = mcqFontSize + 8;
         bgCtx.font = `bold ${qf}px "Segoe UI"`;
-        wrapText(bgCtx, `Q${idx + 1}. ${slide.q}`, mw).forEach(l => { bgCtx.fillText(l, mx, y); y += qf + 8; });
+        wrapText(bgCtx, `Q${idx+1}. ${slide.q}`, mw).forEach(l => { bgCtx.fillText(l, mx, y); y += qf + 8; });
         y += 12;
-        bgCtx.font = `${mcqFontSize + 2}px "Segoe UI"`;
+        bgCtx.font = `${mcqFontSize+2}px "Segoe UI"`;
         bgCtx.fillStyle = '#2c3e66';
-        [{ l: 'A', t: slide.a }, { l: 'B', t: slide.b }, { l: 'C', t: slide.c }, { l: 'D', t: slide.d }].forEach(opt => {
+        [{l:'A',t:slide.a},{l:'B',t:slide.b},{l:'C',t:slide.c},{l:'D',t:slide.d}].forEach(opt => {
             if (!opt.t) return;
-            wrapText(bgCtx, `🔘 ${opt.l}) ${opt.t}`, mw - 20).forEach(l => { bgCtx.fillText(l, mx + 15, y); y += mcqFontSize + 12; });
+            wrapText(bgCtx, `🔘 ${opt.l}) ${opt.t}`, mw-20).forEach(l => { bgCtx.fillText(l, mx+15, y); y += mcqFontSize+12; });
         });
         if (slide.ans) {
-            bgCtx.font = `bold italic ${mcqFontSize + 4}px "Segoe UI"`;
+            bgCtx.font = `bold italic ${mcqFontSize+4}px "Segoe UI"`;
             bgCtx.fillStyle = '#27ae60';
-            wrapText(bgCtx, `✅ CORRECT: ${slide.ans}`, mw).forEach(l => { bgCtx.fillText(l, mx + 15, y); y += mcqFontSize + 14; });
+            wrapText(bgCtx, `✅ CORRECT: ${slide.ans}`, mw).forEach(l => { bgCtx.fillText(l, mx+15, y); y += mcqFontSize+14; });
         }
         redrawAll();
         if (window.MathJax) MathJax.typesetPromise();
@@ -902,9 +884,9 @@
             if (btn) btn.classList.remove('active');
         });
         const mapping = {
-            'draw': 'drawBtn', 'marker': 'markerBtn', 'highlighter': 'highlighterBtn', 'eraser': 'eraseBtn',
-            'fill': 'fillBtn', 'select': 'selectBtn', 'rect': 'rectBtn', 'circle': 'circleBtn',
-            'arrow': 'arrowBtn', 'line': 'lineBtn', 'triangle': 'triangleBtn', 'diamond': 'diamondBtn'
+            'draw':'drawBtn', 'marker':'markerBtn', 'highlighter':'highlighterBtn', 'eraser':'eraseBtn',
+            'fill':'fillBtn', 'select':'selectBtn', 'rect':'rectBtn', 'circle':'circleBtn',
+            'arrow':'arrowBtn', 'line':'lineBtn', 'triangle':'triangleBtn', 'diamond':'diamondBtn'
         };
         if (currentTool !== 'none') {
             const activeId = mapping[currentTool];
@@ -945,21 +927,21 @@
         const t = prompt('Enter text:', 'Text');
         if (t) {
             objects.push({
-                type: 'text', text: t, x: bgCanvas.width / 2, y: bgCanvas.height / 2,
-                fontSize: penSize * 5, color: penColor, rotation: 0, flipH: false, flipV: false
+                type:'text', text:t, x:bgCanvas.width/2, y:bgCanvas.height/2,
+                fontSize:penSize*5, color:penColor, rotation:0, flipH:false, flipV:false
             });
             redrawAll(); saveHistory();
         }
     };
     document.getElementById('rotateLeftBtn').onclick = () => {
         if (selectedObjectIndex >= 0) {
-            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation || 0) - 15;
+            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation||0) - 15;
             redrawAll(); saveHistory();
         }
     };
     document.getElementById('rotateRightBtn').onclick = () => {
         if (selectedObjectIndex >= 0) {
-            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation || 0) + 15;
+            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation||0) + 15;
             redrawAll(); saveHistory();
         }
     };
@@ -985,7 +967,7 @@
     document.getElementById('undoBtn').onclick = undo;
     document.getElementById('redoBtn').onclick = redo;
     document.getElementById('clearBtn').onclick = () => {
-        drawCtx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+        drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height);
         objects = []; selectedObjectIndex = -1;
         redrawAll(); saveHistory();
     };
@@ -1010,7 +992,7 @@
     document.getElementById('recordBtn').onclick = () => alert('Recording feature requires a backend.');
 
     // Color palette
-    const colors = ['#000000', '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#ffffff', '#34495e'];
+    const colors = ['#000000','#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#ffffff','#34495e'];
     const paletteDiv = document.getElementById('colorPalette');
     colors.forEach(c => {
         const swatch = document.createElement('div');
@@ -1028,7 +1010,7 @@
         const text = await file.text();
         slides = parseMCQ(text);
         if (slides.length) {
-            pdfDoc = null; objects = []; drawCtx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+            pdfDoc = null; objects = []; drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height);
             setCanvasSize(1300, 850);
             currentSlide = 0;
             document.getElementById('mcqFontGroup').style.display = 'flex';
@@ -1038,11 +1020,11 @@
             slides.forEach((s, idx) => {
                 const div = document.createElement('div');
                 div.className = 'slide-item' + (idx === 0 ? ' active' : '');
-                div.innerHTML = `📖 ${s.q.substring(0, 45)}${s.q.length > 45 ? '...' : ''}<div class="slide-preview">Q${idx + 1}</div>`;
+                div.innerHTML = `📖 ${s.q.substring(0,45)}${s.q.length>45?'...':''}<div class="slide-preview">Q${idx+1}</div>`;
                 div.onclick = () => {
                     currentSlide = idx;
                     drawMCQ(slides[idx], idx);
-                    container.querySelectorAll('.slide-item').forEach((it, i) => it.classList.toggle('active', i === idx));
+                    container.querySelectorAll('.slide-item').forEach((it,i) => it.classList.toggle('active', i===idx));
                 };
                 container.appendChild(div);
             });
@@ -1058,8 +1040,8 @@
             const w = Math.min(300, bgCanvas.width * 0.35);
             const h = w * (img.height / img.width);
             objects.push({
-                type: 'image', img, x: (bgCanvas.width - w) / 2, y: (bgCanvas.height - h) / 2,
-                w, h, rotation: 0, flipH: false, flipV: false
+                type:'image', img, x:(bgCanvas.width-w)/2, y:(bgCanvas.height-h)/2,
+                w, h, rotation:0, flipH:false, flipV:false
             });
             redrawAll(); saveHistory();
         };
@@ -1094,10 +1076,10 @@
                     const img = new Image();
                     img.onload = () => {
                         objects.push({
-                            type: 'latex', img,
-                            x: (bgCanvas.width - img.width - 20) / 2, y: (bgCanvas.height - img.height - 20) / 2,
-                            w: img.width + 20, h: img.height + 20,
-                            rotation: 0, flipH: false, flipV: false
+                            type:'latex', img,
+                            x:(bgCanvas.width-img.width-20)/2, y:(bgCanvas.height-img.height-20)/2,
+                            w:img.width+20, h:img.height+20,
+                            rotation:0, flipH:false, flipV:false
                         });
                         redrawAll(); saveHistory();
                     };
@@ -1119,14 +1101,14 @@
             initialPinchDist = Math.hypot(dx, dy);
             initialScale = scale;
             const rect = bottomCanvas.getBoundingClientRect();
-            const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-            const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+            const cx = (e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left;
+            const cy = (e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top;
             pinchCenter = {
-                x: ((cx / rect.width) * bottomCanvas.width - offsetX) / scale,
-                y: ((cy / rect.height) * bottomCanvas.height - offsetY) / scale
+                x: ((cx/rect.width) * bottomCanvas.width - offsetX) / scale,
+                y: ((cy/rect.height) * bottomCanvas.height - offsetY) / scale
             };
         }
-    }, { passive: false });
+    }, {passive: false});
     bottomCanvas.addEventListener('touchmove', e => {
         if (e.touches.length === 2) {
             e.preventDefault();
@@ -1136,13 +1118,13 @@
             const newScale = initialScale * (newDist / initialPinchDist);
             scale = Math.min(12, Math.max(0.15, newScale));
             const rect = bottomCanvas.getBoundingClientRect();
-            const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-            const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-            offsetX = (cx / rect.width) * bottomCanvas.width - pinchCenter.x * scale;
-            offsetY = (cy / rect.height) * bottomCanvas.height - pinchCenter.y * scale;
+            const cx = (e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left;
+            const cy = (e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top;
+            offsetX = (cx/rect.width) * bottomCanvas.width - pinchCenter.x * scale;
+            offsetY = (cy/rect.height) * bottomCanvas.height - pinchCenter.y * scale;
             redrawAll();
         }
-    }, { passive: false });
+    }, {passive: false});
     bottomCanvas.addEventListener('touchend', () => { initialPinchDist = 0; });
 
     // Wheel zoom
@@ -1150,17 +1132,17 @@
         e.preventDefault();
         const rect = bottomCanvas.getBoundingClientRect();
         const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-        const wx = ((mx / rect.width) * bottomCanvas.width - offsetX) / scale;
-        const wy = ((my / rect.height) * bottomCanvas.height - offsetY) / scale;
+        const wx = ((mx/rect.width)*bottomCanvas.width - offsetX) / scale;
+        const wy = ((my/rect.height)*bottomCanvas.height - offsetY) / scale;
         const factor = e.deltaY < 0 ? 1.08 : 0.92;
         const newScale = Math.min(12, Math.max(0.15, scale * factor));
-        offsetX = (mx / rect.width) * bottomCanvas.width - wx * newScale;
-        offsetY = (my / rect.height) * bottomCanvas.height - wy * newScale;
+        offsetX = (mx/rect.width)*bottomCanvas.width - wx * newScale;
+        offsetY = (my/rect.height)*bottomCanvas.height - wy * newScale;
         scale = newScale;
         redrawAll();
-    }, { passive: false });
+    }, {passive: false});
 
-    // Right-click pan
+    // Right‑click pan
     let isPanning = false, panStartX, panStartY, panStartOffX, panStartOffY;
     bottomCanvas.addEventListener('mousedown', e => {
         if (e.button === 2) {
@@ -1180,21 +1162,21 @@
     window.addEventListener('mouseup', () => { isPanning = false; });
     bottomCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // ========== POINTER EVENTS ==========
+    // Pointer events
     bottomCanvas.addEventListener('mousedown', handleDown);
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
-    bottomCanvas.addEventListener('touchstart', e => { if (e.touches.length === 1) handleDown(e); }, { passive: false });
-    bottomCanvas.addEventListener('touchmove', e => { if (e.touches.length === 1) handleMove(e); }, { passive: false });
+    bottomCanvas.addEventListener('touchstart', e => { if (e.touches.length === 1) handleDown(e); }, {passive: false});
+    bottomCanvas.addEventListener('touchmove', e => { if (e.touches.length === 1) handleMove(e); }, {passive: false});
     bottomCanvas.addEventListener('touchend', handleUp);
 
-    // ========== INIT ==========
+    // ========== INITIALIZATION ==========
     setCanvasSize(1200, 800);
     bgCtx.fillStyle = 'white';
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Vertex edit is fixed – larger handles and hit areas.');
+    console.log('✅ Full whiteboard with vertex editing ready.');
 </script>
 </body>
 </html>
