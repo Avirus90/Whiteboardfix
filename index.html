@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
-    <title>Whiteboard – Constant Stroke Thickness + Default 2.5x Zoom</title>
+    <title>Whiteboard – Default 2.5x Zoom + Constant Stroke Thickness + Shapes + Vertex Edit</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -140,7 +140,7 @@
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
-<div class="info-banner" id="infoBanner">📌 Stroke thickness constant on screen | Default zoom 2.5x | Highlighter thickness 20px</div>
+<div class="info-banner" id="infoBanner">✅ Default zoom 2.5x | Constant stroke thickness | Highlighter 20px | Pinch to zoom</div>
 
 <!-- Middle Toolbar -->
 <div class="middle-toolbar" id="middleToolbar">
@@ -258,9 +258,10 @@
     let penColor = '#000000';
     let penSize = 4;          // screen thickness in pixels
     let opacity = 1;
-    let scale = 2.5;         // default zoom 2.5x (better handwriting)
+    let scale = 2.5;         // default zoom 2.5x
     let offsetX = 0, offsetY = 0;
 
+    let pdfDoc = null, pdfPages = [];
     let objects = [];
     let editingEnabled = false;
     let vertexEditEnabled = false;
@@ -294,7 +295,7 @@
         [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { c.width = w; c.height = h; });
         drawCtx.clearRect(0, 0, w, h);
         highlighterCtx.clearRect(0, 0, w, h);
-        // Set default zoom to 2.5 and center the canvas
+        // Set default zoom to 2.5 and center the view
         scale = 2.5;
         offsetX = (w - w * scale) / 2;
         offsetY = (h - h * scale) / 2;
@@ -303,27 +304,27 @@
 
     // Brush: line width in canvas space = penSize / scale (so screen thickness = penSize)
     function setBrush(ctx, tool = currentTool) {
-        const effectiveSize = Math.max(0.5, penSize / scale);  // ensure visible, constant screen thickness
+        const effectiveSize = Math.max(0.5, penSize / scale);
         ctx.globalAlpha = opacity;
         ctx.lineWidth = effectiveSize;
         ctx.strokeStyle = penColor;
         ctx.fillStyle = penColor;
         ctx.globalCompositeOperation = 'source-over';
-        if (tool === 'marker') { 
-            ctx.globalAlpha = opacity * 0.75; 
-            ctx.lineWidth = effectiveSize * 1.3; 
+        if (tool === 'marker') {
+            ctx.globalAlpha = opacity * 0.75;
+            ctx.lineWidth = effectiveSize * 1.3;
         }
-        else if (tool === 'highlighter') { 
-            // Highlighter screen thickness = 20px (so canvas thickness = 20 / scale)
-            const highlighterScreen = 20;  // fixed 20px thickness on screen
+        else if (tool === 'highlighter') {
+            // Fixed screen thickness = 20px
+            const highlighterScreen = 20;
             const highlighterCanvas = Math.max(0.5, highlighterScreen / scale);
-            ctx.globalAlpha = 0.25; 
+            ctx.globalAlpha = 0.25;
             ctx.lineWidth = highlighterCanvas;
         }
-        else if (tool === 'eraser') { 
-            ctx.globalCompositeOperation = 'destination-out'; 
-            ctx.strokeStyle = 'rgba(0,0,0,1)'; 
-            ctx.lineWidth = effectiveSize * 1.8; 
+        else if (tool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.strokeStyle = 'rgba(0,0,0,1)';
+            ctx.lineWidth = effectiveSize * 1.8;
         }
     }
 
@@ -339,6 +340,16 @@
             points.push({ x, y });
         }
         return points;
+    }
+
+    function getObjectPoints(obj) {
+        if (obj.points) return obj.points;
+        if (obj.type === 'rect') return [{ x: obj.x, y: obj.y }, { x: obj.x + obj.w, y: obj.y }, { x: obj.x + obj.w, y: obj.y + obj.h }, { x: obj.x, y: obj.y + obj.h }];
+        if (obj.type === 'circle') return [{ x: obj.cx, y: obj.cy - obj.ry }, { x: obj.cx + obj.rx, y: obj.cy }, { x: obj.cx, y: obj.cy + obj.ry }, { x: obj.cx - obj.rx, y: obj.cy }];
+        if (obj.type === 'arrow' || obj.type === 'line') return [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
+        if (obj.type === 'triangle') return obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+        if (obj.type === 'diamond') return [{ x: obj.cx, y: obj.cy - obj.ry }, { x: obj.cx + obj.rx, y: obj.cy }, { x: obj.cx, y: obj.cy + obj.ry }, { x: obj.cx - obj.rx, y: obj.cy }];
+        return [];
     }
 
     function getObjectBounds(obj) {
@@ -368,7 +379,12 @@
         for (let i = objects.length - 1; i >= 0; i--) {
             const obj = objects[i];
             const b = getObjectBounds(obj);
-            if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            
+            if (obj.points && obj.type !== 'rect' && obj.type !== 'circle') {
+                if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            } else {
+                if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            }
         }
         return -1;
     }
@@ -385,7 +401,6 @@
 
     function drawObject(ctx, obj) {
         ctx.save();
-        // For objects, we want screen thickness constant as well
         const screenWidth = (obj.lineWidth || penSize);
         const canvasWidth = Math.max(1, screenWidth / scale);
         ctx.strokeStyle = obj.strokeStyle || penColor;
@@ -445,6 +460,7 @@
 
     function drawSelectionHandles(ctx, obj) {
         const b = getObjectBounds(obj);
+        
         if (vertexEditEnabled && obj.points && obj.points.length > 0) {
             ctx.fillStyle = '#00bbff';
             ctx.strokeStyle = '#fff';
@@ -457,6 +473,7 @@
             }
             return;
         }
+        
         ctx.save();
         ctx.strokeStyle = '#ffd700';
         ctx.lineWidth = 2.5 / scale;
@@ -484,6 +501,7 @@
         bottomCtx.drawImage(highlighterLayer, 0, 0);
         bottomCtx.drawImage(drawLayer, 0, 0);
         objects.forEach(obj => drawObject(bottomCtx, obj));
+        
         if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             drawSelectionHandles(bottomCtx, objects[selectedObjectIndex]);
         }
@@ -536,24 +554,21 @@
     function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(history[historyIndex]); } }
     function redo() { if (historyIndex < history.length - 1) { historyIndex++; restoreHistory(history[historyIndex]); } }
 
-    // Convert screen/touch point to canvas (world) coordinates considering zoom/pan
     function getCanvasCoords(e) {
         const rect = bottomCanvas.getBoundingClientRect();
-        let clientX, clientY;
+        let cx, cy;
         if (e.touches && e.touches.length) {
-            clientX = e.touches[0].clientX - rect.left;
-            clientY = e.touches[0].clientY - rect.top;
+            cx = e.touches[0].clientX - rect.left;
+            cy = e.touches[0].clientY - rect.top;
         } else if (e.changedTouches && e.changedTouches.length) {
-            clientX = e.changedTouches[0].clientX - rect.left;
-            clientY = e.changedTouches[0].clientY - rect.top;
+            cx = e.changedTouches[0].clientX - rect.left;
+            cy = e.changedTouches[0].clientY - rect.top;
         } else {
-            clientX = e.clientX - rect.left;
-            clientY = e.clientY - rect.top;
+            cx = e.clientX - rect.left;
+            cy = e.clientY - rect.top;
         }
-        // Normalize to canvas pixel coordinates (0..width)
-        const canvasX = (clientX / rect.width) * bottomCanvas.width;
-        const canvasY = (clientY / rect.height) * bottomCanvas.height;
-        // Apply inverse transform
+        const canvasX = (cx / rect.width) * bottomCanvas.width;
+        const canvasY = (cy / rect.height) * bottomCanvas.height;
         return {
             x: (canvasX - offsetX) / scale,
             y: (canvasY - offsetY) / scale
@@ -597,7 +612,7 @@
             }
         }
 
-        // Edit mode (resize/rotate/drag)
+        // Edit mode - resize/rotate/drag
         if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             const obj = objects[selectedObjectIndex];
             const b = getObjectBounds(obj);
@@ -643,7 +658,7 @@
             return;
         }
 
-        // Edit mode - simple select
+        // Edit mode - select object
         if (editingEnabled) {
             const hit = hitTestObject(p.x, p.y);
             selectedObjectIndex = hit;
@@ -683,6 +698,7 @@
             }
             return;
         }
+        
         // Rotation
         if (isRotating && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
@@ -695,6 +711,7 @@
             redrawAll();
             return;
         }
+        
         // Resizing
         if (isResizing && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
@@ -708,12 +725,14 @@
                 else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
                 else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
                 else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
-                if (obj.w < 5) obj.w = 5; if (obj.h < 5) obj.h = 5;
+                if (obj.w < 5) obj.w = 5;
+                if (obj.h < 5) obj.h = 5;
             }
             else if (obj.type === 'circle') {
                 const newW = orig.w + (resizeHandle % 2 === 0 ? -dx : dx);
                 const newH = orig.h + (resizeHandle < 2 ? -dy : dy);
-                obj.rx = Math.max(5, newW / 2); obj.ry = Math.max(5, newH / 2);
+                obj.rx = Math.max(5, newW / 2);
+                obj.ry = Math.max(5, newH / 2);
                 obj.cx = orig.cx + (resizeHandle % 2 === 0 ? dx/2 : 0);
                 obj.cy = orig.cy + (resizeHandle < 2 ? dy/2 : 0);
             }
@@ -734,6 +753,7 @@
             redrawAll();
             return;
         }
+        
         // Dragging object
         if (isDraggingObject && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
@@ -748,8 +768,6 @@
             else if (obj.points) {
                 obj.points = dragOrigObj.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
             }
-            else if (obj.type === 'image') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
-            else if (obj.type === 'text') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
             redrawAll();
             return;
         }
@@ -770,7 +788,8 @@
                 bottomCtx.strokeRect(shapeStart.x, shapeStart.y, w, h);
             }
             else if (currentShapeType === 'circle') {
-                const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                const cx = shapeStart.x + w/2;
+                const cy = shapeStart.y + h/2;
                 bottomCtx.beginPath();
                 bottomCtx.ellipse(cx, cy, Math.abs(w)/2, Math.abs(h)/2, 0, 0, 2*Math.PI);
                 bottomCtx.stroke();
@@ -785,7 +804,8 @@
                 bottomCtx.stroke();
             }
             else if (currentShapeType === 'diamond') {
-                const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                const cx = shapeStart.x + w/2;
+                const cy = shapeStart.y + h/2;
                 bottomCtx.beginPath();
                 bottomCtx.moveTo(cx, shapeStart.y);
                 bottomCtx.lineTo(shapeStart.x + w, cy);
@@ -796,7 +816,8 @@
             }
             else if (currentShapeType === 'polygon') {
                 const sides = customPolygonSides;
-                const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                const cx = shapeStart.x + w/2;
+                const cy = shapeStart.y + h/2;
                 const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
                 const points = generatePolygonPoints(cx, cy, radius, sides);
                 bottomCtx.beginPath();
@@ -864,28 +885,55 @@
                 const obj = { strokeStyle: penColor, lineWidth: penSize, opacity };
                 
                 if (currentShapeType === 'rect') {
-                    obj.type = 'rect'; obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(w); obj.h = Math.abs(h);
+                    obj.type = 'rect';
+                    obj.x = Math.min(shapeStart.x, p.x);
+                    obj.y = Math.min(shapeStart.y, p.y);
+                    obj.w = Math.abs(w);
+                    obj.h = Math.abs(h);
                 }
                 else if (currentShapeType === 'circle') {
-                    obj.type = 'circle'; obj.cx = shapeStart.x + w/2; obj.cy = shapeStart.y + h/2; obj.rx = Math.abs(w)/2; obj.ry = Math.abs(h)/2;
+                    obj.type = 'circle';
+                    obj.cx = shapeStart.x + w/2;
+                    obj.cy = shapeStart.y + h/2;
+                    obj.rx = Math.abs(w)/2;
+                    obj.ry = Math.abs(h)/2;
                 }
                 else if (currentShapeType === 'triangle') {
-                    obj.type = 'triangle'; const cx = shapeStart.x + w/2;
-                    obj.points = [{ x: cx, y: shapeStart.y }, { x: shapeStart.x, y: shapeStart.y + h }, { x: shapeStart.x + w, y: shapeStart.y + h }];
+                    obj.type = 'triangle';
+                    const cx = shapeStart.x + w/2;
+                    obj.points = [
+                        { x: cx, y: shapeStart.y },
+                        { x: shapeStart.x, y: shapeStart.y + h },
+                        { x: shapeStart.x + w, y: shapeStart.y + h }
+                    ];
                 }
                 else if (currentShapeType === 'diamond') {
-                    obj.type = 'diamond'; obj.cx = shapeStart.x + w/2; obj.cy = shapeStart.y + h/2; obj.rx = Math.abs(w)/2; obj.ry = Math.abs(h)/2;
+                    obj.type = 'diamond';
+                    obj.cx = shapeStart.x + w/2;
+                    obj.cy = shapeStart.y + h/2;
+                    obj.rx = Math.abs(w)/2;
+                    obj.ry = Math.abs(h)/2;
                 }
                 else if (currentShapeType === 'polygon') {
-                    obj.type = 'polygon'; const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                    obj.type = 'polygon';
+                    const cx = shapeStart.x + w/2;
+                    const cy = shapeStart.y + h/2;
                     const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
                     obj.points = generatePolygonPoints(cx, cy, radius, customPolygonSides);
                 }
                 else if (currentShapeType === 'arrow') {
-                    obj.type = 'arrow'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y;
+                    obj.type = 'arrow';
+                    obj.x1 = shapeStart.x;
+                    obj.y1 = shapeStart.y;
+                    obj.x2 = p.x;
+                    obj.y2 = p.y;
                 }
                 else if (currentShapeType === 'line') {
-                    obj.type = 'line'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y;
+                    obj.type = 'line';
+                    obj.x1 = shapeStart.x;
+                    obj.y1 = shapeStart.y;
+                    obj.x2 = p.x;
+                    obj.y2 = p.y;
                 }
                 objects.push(obj);
                 saveHistory();
@@ -925,7 +973,7 @@
     
     function hexToRgb(h) { return { r: parseInt(h.slice(1,3),16), g: parseInt(h.slice(3,5),16), b: parseInt(h.slice(5,7),16) }; }
 
-    // ========== RECORDING ==========
+    // ========== RECORDING (Simplified) ==========
     async function toggleRecording() {
         if (isRecording) {
             if (mediaRecorder) mediaRecorder.stop();
@@ -971,11 +1019,10 @@
     // ========== TOOL FUNCTIONS ==========
     function setTool(t) {
         currentTool = t;
-        // Update active button style
         document.querySelectorAll('#drawBtn, #markerBtn, #highlighterBtn, #eraseBtn, #fillBtn, #selectBtn, #rectBtn, #circleBtn, #triangleBtn, #diamondBtn, #polygonBtn, #arrowBtn, #lineBtn').forEach(btn => btn.classList.remove('active'));
         const map = { 'draw':'drawBtn', 'marker':'markerBtn', 'highlighter':'highlighterBtn', 'eraser':'eraseBtn', 'fill':'fillBtn', 'select':'selectBtn', 'rect':'rectBtn', 'circle':'circleBtn', 'triangle':'triangleBtn', 'diamond':'diamondBtn', 'polygon':'polygonBtn', 'arrow':'arrowBtn', 'line':'lineBtn' };
         if (map[t]) document.getElementById(map[t]).classList.add('active');
-        // If switching to shape, ensure shapeStart is null
+        // If switching to shape, set currentShapeType
         if (['rect','circle','triangle','diamond','polygon','arrow','line'].includes(t)) {
             currentShapeType = t;
         } else {
@@ -1146,7 +1193,7 @@
     window.addEventListener('mouseup', () => { isPanning = false; });
     bottomCanvas.addEventListener('contextmenu', e => e.preventDefault());
     
-    // Touch pinch + pan
+    // Touch pinch + pan (improved for mobile)
     function getTouchDistance(t1, t2) {
         return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
     }
@@ -1171,7 +1218,7 @@
             initialOffsetY = offsetY;
             const mid = getTouchMidpoint(e.touches[0], e.touches[1], bottomCanvas);
             pinchCenter = { x: mid.x, y: mid.y };
-            // Also store for pan
+            // Store for pan
             panStartX = (e.touches[0].clientX + e.touches[1].clientX)/2;
             panStartY = (e.touches[0].clientY + e.touches[1].clientY)/2;
             twoFingerPan = true;
@@ -1188,7 +1235,6 @@
                 const zoom = newDist / initialPinchDist;
                 let newScale = initialScale * zoom;
                 newScale = Math.min(12, Math.max(0.2, newScale));
-                // Keep the pinch center fixed in world coordinates
                 const worldX = (pinchCenter.x - initialOffsetX) / initialScale;
                 const worldY = (pinchCenter.y - initialOffsetY) / initialScale;
                 offsetX = pinchCenter.x - worldX * newScale;
@@ -1202,7 +1248,6 @@
             if (twoFingerPan) {
                 const deltaX = newPanX - panStartX;
                 const deltaY = newPanY - panStartY;
-                // Convert delta to canvas coordinate shift
                 offsetX += deltaX;
                 offsetY += deltaY;
                 panStartX = newPanX;
@@ -1228,7 +1273,7 @@
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Zoom fixed: constant stroke thickness, default zoom 2.5x, highlighter 20px');
+    console.log('✅ Fixed: default zoom 2.5x, constant stroke thickness, highlighter 20px, pinch zoom works');
 </script>
 </body>
 </html>
