@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
     <title>Whiteboard – Vector Strokes – Constant Thickness on Zoom</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
@@ -140,8 +140,9 @@
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
-<div class="info-banner" id="infoBanner">✅ Vector strokes – Zoom पर thickness constant रहेगी | Highlighter 20px</div>
+<div class="info-banner" id="infoBanner">✅ Vector strokes – Zoom पर thickness constant (4px) | Highlighter 20px | Eraser = Smart Erase</div>
 
+<!-- Middle Toolbar -->
 <div class="middle-toolbar" id="middleToolbar">
     <div class="tool-group">
         <div class="color-palette" id="colorPalette"></div>
@@ -155,8 +156,8 @@
         <button id="drawBtn" class="active">✏️ Pen</button>
         <button id="markerBtn">🖌️ Marker</button>
         <button id="highlighterBtn">✨ Highlighter</button>
-        <button id="eraseBtn">🧽 Eraser</button>
-        <button id="fillBtn">🎨 Fill</button>
+        <button id="eraseBtn">🧽 Eraser (Smart)</button>
+        <button id="fillBtn" disabled style="opacity:0.5;">🎨 Fill (Vector)</button>
     </div>
     <div class="tool-group">
         <button id="rectBtn">⬛ Rect</button>
@@ -199,6 +200,7 @@
     </div>
 </div>
 
+<!-- Main Layout -->
 <div class="main-layout">
     <div class="canvas-card">
         <div class="card-header">📄 MASTER VIEW (Static)</div>
@@ -208,20 +210,22 @@
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ INTERACTIVE CANVAS (Zoom • Pan • Vector Strokes)</div>
+        <div class="card-header">✍️ INTERACTIVE CANVAS (Zoom: Wheel | Pan: Right-Click | Vector strokes)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
-            <div class="status" id="bottomStatus">Zoom: 2.50x | Mode: Draw</div>
+            <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
         </div>
     </div>
 </div>
 
+<!-- Slide Sidebar -->
 <div class="slide-sidebar" id="slideSidebar">
     <div class="slide-title"><span>📚 SLIDES / PAGES</span><button class="close-slide" id="closeSlideBtn">✕</button></div>
     <div class="slide-list" id="slideList"><div style="text-align:center;padding:30px;color:gray;">No slides loaded.</div></div>
 </div>
 <button class="toggle-slide-btn" id="toggleSlideBtn">📋</button>
 
+<!-- LaTeX Modal -->
 <div id="latexModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:2000;justify-content:center;align-items:center;">
     <div style="background:white;padding:20px;border-radius:16px;min-width:350px;color:#1a1a2e;">
         <h3>📐 Insert LaTeX</h3>
@@ -234,87 +238,128 @@
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-    // DOM Elements
+    // ========== DOM ELEMENTS ==========
     const topCanvas = document.getElementById('topCanvas');
     const bottomCanvas = document.getElementById('bottomCanvas');
     const topCtx = topCanvas.getContext('2d');
     const bottomCtx = bottomCanvas.getContext('2d');
     const bgCanvas = document.createElement('canvas');
     const bgCtx = bgCanvas.getContext('2d');
-    
-    // We'll use only one drawing layer for vector strokes – but for performance we keep highlighter separate? Actually we will draw all strokes from vector data.
-    // To simplify, we remove raster layers and draw everything from strokes array.
-    // But we need to support highlighter as a tool – it will also be vector stroke with larger width and low opacity.
-    // So we'll store strokes in a global array and redraw them on every frame.
-    
-    // For PDF background, we have bgCanvas.
-    // For strokes, we have currentStrokes array.
-    
-    let pdfDoc = null, currentPageNum = 1, totalPages = 0;
-    let hasPDF = false;
-    
+
+    // ========== STATE ==========
     let currentTool = 'draw';
     let penColor = '#000000';
-    let penSize = 4;          // screen thickness in pixels
+    let penSize = 4;          // desired screen thickness in pixels
     let opacity = 1;
-    let scale = 2.5;         // default zoom for bottom canvas
-    let offsetX = 0, offsetY = 0;
-    
-    // Strokes storage (vector)
-    let currentStrokes = [];      // each stroke: { points: [{x,y}], color, width, tool, opacity }
-    let pageStrokes = {};         // per page
-    let history = [], historyIndex = -1;
-    
-    // Shape objects (rect, circle, triangle, diamond, polygon, arrow, line) – stored as objects in separate array? We'll store shapes also in currentStrokes with type='shape'
-    let objects = [];   // kept for compatibility, but we will merge shapes into strokes as special entries
-    
+    let scale = 1, offsetX = 0, offsetY = 0;   // zoom for bottom canvas
+
+    let pdfDoc = null, currentPageNum = 1, totalPages = 0;
+    let pageObjects = {};      // store objects per page
+    let objects = [];          // current page objects: each is { type, ... }
     let editingEnabled = false;
     let vertexEditEnabled = false;
     let selectedObjectIndex = -1;
-    
-    let drawing = false, lastPoint = {x:0,y:0}, smoothPoints = [];
+    let history = [], historyIndex = -1;
+
+    // Drawing temporary state
+    let drawing = false, currentStrokePoints = [];
     let shapeStart = null, currentShapeType = null;
     let customPolygonSides = 5;
-    
+
+    // Editing handles
     let isDraggingObject = false, dragStartX = 0, dragStartY = 0, dragOrigObj = null;
     let isResizing = false, resizeHandle = null, resizeStartBounds = null;
     let isRotating = false, rotateStartAngle = 0;
     let isDraggingVertex = false, vertexIndex = -1;
-    
+
     // Recording
     let mediaRecorder = null, recordedChunks = [], isRecording = false;
     let micStream = null, micEnabled = false;
-    
-    // Touch pinch/pan
-    let initialPinchDist = 0, initialScale = 1, initialOffsetX = 0, initialOffsetY = 0;
-    let pinchCenter = { x: 0, y: 0 };
-    let isPinching = false, twoFingerPan = false;
-    let panStart = { x: 0, y: 0 };
-    
+
     // ========== HELPER FUNCTIONS ==========
     function setCanvasSize(w, h) {
         topCanvas.width = w; topCanvas.height = h;
         bottomCanvas.width = w; bottomCanvas.height = h;
         bgCanvas.width = w; bgCanvas.height = h;
-        scale = 2.5;
-        offsetX = (w - w * scale) / 2;
-        offsetY = (h - h * scale) / 2;
+        scale = 1; offsetX = 0; offsetY = 0;
         redrawAll();
     }
-    
-    function getStrokeCanvasWidth(stroke) {
-        // stroke.width is desired screen thickness
-        let thickness = stroke.width;
-        if (stroke.tool === 'highlighter') thickness = 20;
-        else if (stroke.tool === 'marker') thickness = stroke.width * 1.3;
-        else if (stroke.tool === 'eraser') thickness = stroke.width * 1.8;
-        return Math.max(0.5, thickness / scale);
+
+    // Generate regular polygon points
+    function generatePolygonPoints(cx, cy, radius, sides, rotation = 0) {
+        const points = [];
+        const angleStep = (2 * Math.PI) / sides;
+        const rot = rotation * Math.PI / 180;
+        for (let i = 0; i < sides; i++) {
+            const angle = i * angleStep - Math.PI / 2 + rot;
+            points.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
+        }
+        return points;
     }
-    
+
+    function getObjectBounds(obj) {
+        if (obj.type === 'stroke') {
+            if (!obj.points || obj.points.length === 0) return null;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            obj.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+        }
+        if (obj.type === 'shape') {
+            const d = obj.data;
+            if (obj.shapeType === 'rect') return { x: d.x, y: d.y, w: d.w, h: d.h, cx: d.x + d.w/2, cy: d.y + d.h/2 };
+            if (obj.shapeType === 'circle') return { x: d.cx - d.rx, y: d.cy - d.ry, w: d.rx*2, h: d.ry*2, cx: d.cx, cy: d.cy };
+            if (obj.shapeType === 'triangle') {
+                let xs = [d.x1, d.x2, d.x3], ys = [d.y1, d.y2, d.y3];
+                let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+                return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+            }
+            if (obj.shapeType === 'diamond') return { x: d.cx - d.rx, y: d.cy - d.ry, w: d.rx*2, h: d.ry*2, cx: d.cx, cy: d.cy };
+            if (obj.shapeType === 'arrow' || obj.shapeType === 'line') {
+                let minX = Math.min(d.x1, d.x2), maxX = Math.max(d.x1, d.x2);
+                let minY = Math.min(d.y1, d.y2), maxY = Math.max(d.y1, d.y2);
+                return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+            }
+            if (obj.shapeType === 'polygon') {
+                let xs = d.points.map(p => p.x), ys = d.points.map(p => p.y);
+                let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+                return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+            }
+        }
+        if (obj.type === 'image') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w/2, cy: obj.y + obj.h/2 };
+        if (obj.type === 'text') return { x: obj.x, y: obj.y - 20, w: 100, h: 30, cx: obj.x + 50, cy: obj.y - 5 };
+        return null;
+    }
+
+    function hitTestObject(px, py) {
+        for (let i = objects.length - 1; i >= 0; i--) {
+            const b = getObjectBounds(objects[i]);
+            if (b && px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+        }
+        return -1;
+    }
+
+    function hitTestVertex(obj, px, py) {
+        if (obj.type !== 'shape' || obj.shapeType !== 'polygon') return -1;
+        const threshold = Math.max(15 / scale, 18);
+        for (let i = 0; i < obj.data.points.length; i++) {
+            const p = obj.data.points[i];
+            if (Math.hypot(px - p.x, py - p.y) < threshold) return i;
+        }
+        return -1;
+    }
+
+    function getStrokeCanvasWidth(stroke) {
+        let targetScreen = stroke.width;
+        if (stroke.tool === 'highlighter') targetScreen = 20;
+        else if (stroke.tool === 'marker') targetScreen = stroke.width * 1.3;
+        else if (stroke.tool === 'eraser') targetScreen = stroke.width * 1.8;
+        return Math.max(0.5, targetScreen / scale);
+    }
+
     function drawStroke(ctx, stroke) {
         if (!stroke.points || stroke.points.length === 0) return;
         ctx.save();
-        ctx.globalAlpha = stroke.opacity || 1;
+        ctx.globalAlpha = stroke.opacity;
         ctx.strokeStyle = stroke.color;
         ctx.fillStyle = stroke.color;
         ctx.lineCap = 'round';
@@ -333,14 +378,12 @@
         } else {
             ctx.beginPath();
             ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-            for (let i = 1; i < stroke.points.length; i++) {
-                ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-            }
+            for (let i = 1; i < stroke.points.length; i++) ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
             ctx.stroke();
         }
         ctx.restore();
     }
-    
+
     function drawShape(ctx, shape) {
         ctx.save();
         const screenWidth = shape.width || penSize;
@@ -373,7 +416,7 @@
             ctx.lineTo(d.x2, d.y2);
             ctx.stroke();
             const angle = Math.atan2(d.y2 - d.y1, d.x2 - d.x1);
-            const sz = Math.min(20 / scale, Math.hypot(d.x2-d.x1, d.y2-d.y1) * 0.25);
+            const sz = Math.min(20 / scale, Math.hypot(d.x2 - d.x1, d.y2 - d.y1) * 0.25);
             ctx.beginPath();
             ctx.moveTo(d.x2, d.y2);
             ctx.lineTo(d.x2 - sz * Math.cos(angle - Math.PI/6), d.y2 - sz * Math.sin(angle - Math.PI/6));
@@ -386,64 +429,26 @@
             ctx.stroke();
         } else if (shape.shapeType === 'polygon') {
             ctx.moveTo(d.points[0].x, d.points[0].y);
-            for (let i=1; i<d.points.length; i++) ctx.lineTo(d.points[i].x, d.points[i].y);
+            for (let i = 1; i < d.points.length; i++) ctx.lineTo(d.points[i].x, d.points[i].y);
             ctx.closePath();
             ctx.stroke();
         }
         ctx.restore();
     }
-    
+
     function drawImageObj(ctx, imgObj) {
-        if (imgObj.imgElement) {
-            ctx.drawImage(imgObj.imgElement, imgObj.x, imgObj.y, imgObj.w, imgObj.h);
+        if (imgObj.img) {
+            ctx.drawImage(imgObj.img, imgObj.x, imgObj.y, imgObj.w, imgObj.h);
         }
     }
-    
+
     function drawTextObj(ctx, textObj) {
         const screenFont = Math.max(8, textObj.fontSize || 20);
         ctx.font = `${screenFont / scale}px "Segoe UI"`;
         ctx.fillStyle = textObj.color;
         ctx.fillText(textObj.text, textObj.x, textObj.y);
     }
-    
-    function redrawAll() {
-        // Bottom canvas
-        bottomCtx.setTransform(1,0,0,1,0,0);
-        bottomCtx.clearRect(0,0,bottomCanvas.width,bottomCanvas.height);
-        bottomCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
-        bottomCtx.drawImage(bgCanvas,0,0);
-        
-        // Draw all strokes (freehand, shapes, images, text)
-        for (let s of currentStrokes) {
-            if (s.type === 'stroke') drawStroke(bottomCtx, s);
-            else if (s.type === 'shape') drawShape(bottomCtx, s);
-            else if (s.type === 'image') drawImageObj(bottomCtx, s);
-            else if (s.type === 'text') drawTextObj(bottomCtx, s);
-        }
-        
-        if (selectedObjectIndex >= 0 && currentStrokes[selectedObjectIndex]) {
-            drawSelectionHandles(bottomCtx, currentStrokes[selectedObjectIndex]);
-        }
-        
-        // Top canvas (static, no transform)
-        topCtx.setTransform(1,0,0,1,0,0);
-        topCtx.clearRect(0,0,topCanvas.width,topCanvas.height);
-        topCtx.drawImage(bgCanvas,0,0);
-        for (let s of currentStrokes) {
-            if (s.type === 'stroke') drawStroke(topCtx, s);
-            else if (s.type === 'shape') drawShape(topCtx, s);
-            else if (s.type === 'image') drawImageObj(topCtx, s);
-            else if (s.type === 'text') drawTextObj(topCtx, s);
-        }
-        if (selectedObjectIndex >= 0 && currentStrokes[selectedObjectIndex]) {
-            drawSelectionHandles(topCtx, currentStrokes[selectedObjectIndex]);
-        }
-        
-        const mode = vertexEditEnabled ? 'Vertex Edit' : (editingEnabled ? 'Edit' : 'Draw');
-        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${mode}`;
-        document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline' : 'none';
-    }
-    
+
     function drawSelectionHandles(ctx, obj) {
         const b = getObjectBounds(obj);
         if (!b) return;
@@ -466,7 +471,7 @@
         ctx.setLineDash([]);
         const hSize = Math.max(12 / scale, 14);
         ctx.fillStyle = '#ffd700';
-        [[b.x, b.y], [b.x+b.w, b.y], [b.x, b.y+b.h], [b.x+b.w, b.y+b.h]].forEach(([cx,cy]) => {
+        [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => {
             ctx.fillRect(cx - hSize/2, cy - hSize/2, hSize, hSize);
         });
         ctx.fillStyle = '#e74c3c';
@@ -475,340 +480,431 @@
         ctx.fill();
         ctx.restore();
     }
-    
-    function getObjectBounds(obj) {
-        if (obj.type === 'stroke') {
-            if (!obj.points || obj.points.length===0) return null;
-            let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-            obj.points.forEach(p=>{ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); });
-            return { x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2 };
+
+    function redrawAll() {
+        // Bottom canvas (zoomable)
+        bottomCtx.setTransform(1, 0, 0, 1, 0, 0);
+        bottomCtx.clearRect(0, 0, bottomCanvas.width, bottomCanvas.height);
+        bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+        bottomCtx.drawImage(bgCanvas, 0, 0);
+        for (let obj of objects) {
+            if (obj.type === 'stroke') drawStroke(bottomCtx, obj);
+            else if (obj.type === 'shape') drawShape(bottomCtx, obj);
+            else if (obj.type === 'image') drawImageObj(bottomCtx, obj);
+            else if (obj.type === 'text') drawTextObj(bottomCtx, obj);
         }
-        if (obj.type === 'shape') {
-            const d = obj.data;
-            if (obj.shapeType === 'rect') return { x:d.x, y:d.y, w:d.w, h:d.h, cx:d.x+d.w/2, cy:d.y+d.h/2 };
-            if (obj.shapeType === 'circle') return { x:d.cx-d.rx, y:d.cy-d.ry, w:d.rx*2, h:d.ry*2, cx:d.cx, cy:d.cy };
-            if (obj.shapeType === 'triangle') {
-                let xs=[d.x1,d.x2,d.x3], ys=[d.y1,d.y2,d.y3];
-                let minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
-                return { x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2 };
-            }
-            if (obj.shapeType === 'diamond') return { x:d.cx-d.rx, y:d.cy-d.ry, w:d.rx*2, h:d.ry*2, cx:d.cx, cy:d.cy };
-            if (obj.shapeType === 'arrow' || obj.shapeType === 'line') {
-                let minX=Math.min(d.x1,d.x2), maxX=Math.max(d.x1,d.x2), minY=Math.min(d.y1,d.y2), maxY=Math.max(d.y1,d.y2);
-                return { x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2 };
-            }
-            if (obj.shapeType === 'polygon') {
-                let xs=d.points.map(p=>p.x), ys=d.points.map(p=>p.y);
-                let minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
-                return { x:minX, y:minY, w:maxX-minX, h:maxY-minY, cx:(minX+maxX)/2, cy:(minY+maxY)/2 };
-            }
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            drawSelectionHandles(bottomCtx, objects[selectedObjectIndex]);
         }
-        if (obj.type === 'image') return { x:obj.x, y:obj.y, w:obj.w, h:obj.h, cx:obj.x+obj.w/2, cy:obj.y+obj.h/2 };
-        if (obj.type === 'text') return { x:obj.x, y:obj.y-20, w:100, h:30, cx:obj.x+50, cy:obj.y-5 };
-        return null;
+
+        // Top canvas (static)
+        topCtx.setTransform(1, 0, 0, 1, 0, 0);
+        topCtx.clearRect(0, 0, topCanvas.width, topCanvas.height);
+        topCtx.drawImage(bgCanvas, 0, 0);
+        for (let obj of objects) {
+            if (obj.type === 'stroke') drawStroke(topCtx, obj);
+            else if (obj.type === 'shape') drawShape(topCtx, obj);
+            else if (obj.type === 'image') drawImageObj(topCtx, obj);
+            else if (obj.type === 'text') drawTextObj(topCtx, obj);
+        }
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            drawSelectionHandles(topCtx, objects[selectedObjectIndex]);
+        }
+
+        const mode = vertexEditEnabled ? 'Vertex Edit' : (editingEnabled ? 'Edit' : 'Draw');
+        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | Mode: ${mode}`;
+        document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline' : 'none';
     }
-    
-    function hitTestObject(px, py) {
-        for (let i = currentStrokes.length-1; i >= 0; i--) {
-            const b = getObjectBounds(currentStrokes[i]);
-            if (b && px >= b.x && px <= b.x+b.w && py >= b.y && py <= b.y+b.h) return i;
-        }
-        return -1;
-    }
-    
+
     // ========== HISTORY ==========
     function saveHistory() {
         const state = {
-            strokes: JSON.parse(JSON.stringify(currentStrokes)),
+            objects: JSON.parse(JSON.stringify(objects)),
             bgData: bgCanvas.toDataURL()
         };
-        if (historyIndex < history.length-1) history = history.slice(0, historyIndex+1);
+        if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
         history.push(state);
-        historyIndex = history.length-1;
+        historyIndex = history.length - 1;
         if (history.length > 30) { history.shift(); historyIndex--; }
     }
-    
+
     function restoreHistory(state) {
         const bgImg = new Image();
         bgImg.onload = () => {
-            bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
-            bgCtx.drawImage(bgImg,0,0);
-            currentStrokes = state.strokes;
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.drawImage(bgImg, 0, 0);
+            objects = state.objects;
+            // Restore image elements from imgSrc if any
+            for (let obj of objects) {
+                if (obj.type === 'image' && obj.imgSrc && !obj.img) {
+                    const img = new Image();
+                    img.src = obj.imgSrc;
+                    obj.img = img;
+                }
+            }
             selectedObjectIndex = -1;
             redrawAll();
         };
         bgImg.src = state.bgData;
     }
-    
+
     function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(history[historyIndex]); } }
-    function redo() { if (historyIndex < history.length-1) { historyIndex++; restoreHistory(history[historyIndex]); } }
-    
-    // ========== DRAWING HANDLERS ==========
+    function redo() { if (historyIndex < history.length - 1) { historyIndex++; restoreHistory(history[historyIndex]); } }
+
+    // ========== COORDINATES ==========
     function getCanvasCoords(e) {
         const rect = bottomCanvas.getBoundingClientRect();
-        let clientX, clientY;
-        if (e.touches && e.touches.length) { clientX = e.touches[0].clientX - rect.left; clientY = e.touches[0].clientY - rect.top; }
-        else if (e.changedTouches && e.changedTouches.length) { clientX = e.changedTouches[0].clientX - rect.left; clientY = e.changedTouches[0].clientY - rect.top; }
-        else { clientX = e.clientX - rect.left; clientY = e.clientY - rect.top; }
-        const canvasX = (clientX / rect.width) * bottomCanvas.width;
-        const canvasY = (clientY / rect.height) * bottomCanvas.height;
+        let cx, cy;
+        if (e.touches?.length) { cx = e.touches[0].clientX - rect.left; cy = e.touches[0].clientY - rect.top; }
+        else if (e.changedTouches?.length) { cx = e.changedTouches[0].clientX - rect.left; cy = e.changedTouches[0].clientY - rect.top; }
+        else { cx = e.clientX - rect.left; cy = e.clientY - rect.top; }
+        const canvasX = (cx / rect.width) * bottomCanvas.width;
+        const canvasY = (cy / rect.height) * bottomCanvas.height;
         return { x: (canvasX - offsetX) / scale, y: (canvasY - offsetY) / scale };
     }
-    
-    function startStroke(p) {
-        drawing = true;
-        smoothPoints = [p];
-        lastPoint = p;
-        saveHistory();
-    }
-    
-    function addStrokePoint(p) {
-        if (!drawing) return;
-        smoothPoints.push(p);
-        if (smoothPoints.length > 3) smoothPoints.shift();
-        // Draw temporary segment on both canvases for preview? We'll just redraw all after each point? For performance, we can draw directly on a temporary layer? Simpler: redrawAll after each move is heavy but works.
-        // We'll directly draw on current strokes temporarily? Better to just redrawAll.
-        // But we need to update the stroke object incrementally. We'll accumulate points and at the end push full stroke.
-        // For real-time feedback, we can draw a temporary line on canvas. But to keep it consistent, we redrawAll after each move is okay with vector redraw.
-        // Actually we don't need to redrawAll on every move; we can draw a temporary line on top of the canvas. But let's keep it simple: on move we redrawAll.
-        // However, for smooth drawing, we need to update the last point of the current stroke. So we store currentStrokePoints.
-        // We'll maintain a temporary stroke being built.
-        if (!window._tempStroke) window._tempStroke = { points: [], color: penColor, width: penSize, tool: currentTool, opacity: opacity, type: 'stroke' };
-        window._tempStroke.points.push(p);
-        redrawAll();
-        // Also draw temporary line on top of existing strokes? Since redrawAll redraws from stored strokes, we need to include the temp stroke.
-        // We'll handle by storing tempStroke separately and drawing it in redrawAll.
-    }
-    
-    // Rewrite draw handlers properly:
-    let currentStrokePoints = [];
-    
-    function handleDown(e) {
-        if (e.type==='mousedown' && e.button!==0) return;
-        e.preventDefault();
-        if (currentTool === 'none') return;
-        const p = getCanvasCoords(e);
-        // vertex edit etc...
-        if (vertexEditEnabled && selectedObjectIndex>=0 && currentStrokes[selectedObjectIndex] && currentStrokes[selectedObjectIndex].type==='shape' && currentStrokes[selectedObjectIndex].shapeType==='polygon') {
-            const obj = currentStrokes[selectedObjectIndex];
-            const vi = hitTestVertex(obj.data.points, p.x, p.y);
-            if (vi>=0) { isDraggingVertex=true; vertexIndex=vi; return; }
-        }
-        if (editingEnabled && selectedObjectIndex>=0 && currentStrokes[selectedObjectIndex]) {
-            const obj = currentStrokes[selectedObjectIndex];
-            const b = getObjectBounds(obj);
-            if (b) {
-                const hSize = Math.max(12/scale,14);
-                const rotCenter = { x: b.x+b.w/2, y: b.y-22/scale };
-                if (Math.hypot(p.x-rotCenter.x, p.y-rotCenter.y) < hSize) {
-                    isRotating=true; rotateStartAngle=Math.atan2(p.y-b.cy, p.x-b.cx); return;
+
+    // ========== ERASER (Smart) ==========
+    function eraseStrokesNearPath(points, tolerance) {
+        let toDelete = new Set();
+        for (let i = 0; i < objects.length; i++) {
+            const obj = objects[i];
+            if (obj.type === 'stroke') {
+                for (let p of obj.points) {
+                    for (let ep of points) {
+                        if (Math.hypot(p.x - ep.x, p.y - ep.y) < tolerance) {
+                            toDelete.add(i);
+                            break;
+                        }
+                    }
+                    if (toDelete.has(i)) break;
                 }
-                const corners = [[b.x,b.y],[b.x+b.w,b.y],[b.x,b.y+b.h],[b.x+b.w,b.y+b.h]];
-                for(let i=0;i<corners.length;i++) {
-                    if(Math.abs(p.x-corners[i][0])<hSize && Math.abs(p.y-corners[i][1])<hSize) {
-                        isResizing=true; resizeHandle=i; resizeStartBounds={...b}; dragStartX=p.x; dragStartY=p.y; return;
+            } else if (obj.type === 'shape') {
+                // simple bounding box test
+                const b = getObjectBounds(obj);
+                if (b) {
+                    for (let ep of points) {
+                        if (ep.x >= b.x && ep.x <= b.x + b.w && ep.y >= b.y && ep.y <= b.y + b.h) {
+                            toDelete.add(i);
+                            break;
+                        }
                     }
                 }
-                if(hitTestObject(p.x,p.y)===selectedObjectIndex) {
-                    isDraggingObject=true; dragStartX=p.x; dragStartY=p.y; dragOrigObj=JSON.parse(JSON.stringify(obj)); redrawAll(); return;
+            } else if (obj.type === 'image' || obj.type === 'text') {
+                const b = getObjectBounds(obj);
+                if (b) {
+                    for (let ep of points) {
+                        if (ep.x >= b.x && ep.x <= b.x + b.w && ep.y >= b.y && ep.y <= b.y + b.h) {
+                            toDelete.add(i);
+                            break;
+                        }
+                    }
                 }
             }
         }
-        if(currentTool === 'select') {
-            const hit = hitTestObject(p.x,p.y);
-            if(hit>=0) { selectedObjectIndex=hit; isDraggingObject=true; dragStartX=p.x; dragStartY=p.y; dragOrigObj=JSON.parse(JSON.stringify(currentStrokes[hit])); redrawAll(); }
-            else { selectedObjectIndex=-1; redrawAll(); }
-            return;
+        if (toDelete.size) {
+            objects = objects.filter((_, idx) => !toDelete.has(idx));
+            selectedObjectIndex = -1;
+            saveHistory();
+            redrawAll();
         }
-        if(editingEnabled) { selectedObjectIndex = hitTestObject(p.x,p.y); redrawAll(); return; }
-        if(currentTool === 'fill') { floodFill(Math.round(p.x), Math.round(p.y)); return; }
-        if(['rect','circle','triangle','diamond','polygon','arrow','line'].includes(currentTool)) {
-            shapeStart = p; currentShapeType = currentTool; drawing = true; return;
-        }
-        // freehand
-        drawing = true;
-        currentStrokePoints = [{x:p.x, y:p.y}];
-        lastPoint = p;
-        saveHistory();
     }
-    
-    function handleMove(e) {
-        if(isDraggingVertex && selectedObjectIndex>=0 && currentStrokes[selectedObjectIndex] && currentStrokes[selectedObjectIndex].type==='shape' && currentStrokes[selectedObjectIndex].shapeType==='polygon') {
-            const p = getCanvasCoords(e);
-            const obj = currentStrokes[selectedObjectIndex];
-            if(obj.data.points && vertexIndex<obj.data.points.length) {
-                obj.data.points[vertexIndex] = {x:p.x, y:p.y};
+
+    // ========== EVENT HANDLERS ==========
+    function handleDown(e) {
+        if (e.type === 'mousedown' && e.button !== 0) return;
+        e.preventDefault();
+        if (currentTool === 'none') return;
+        const p = getCanvasCoords(e);
+
+        // Vertex edit mode
+        if (vertexEditEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex] && objects[selectedObjectIndex].type === 'shape' && objects[selectedObjectIndex].shapeType === 'polygon') {
+            const idx = hitTestVertex(objects[selectedObjectIndex], p.x, p.y);
+            if (idx >= 0) { isDraggingVertex = true; vertexIndex = idx; return; }
+        }
+
+        // Edit mode
+        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const obj = objects[selectedObjectIndex];
+            const b = getObjectBounds(obj);
+            if (b) {
+                const hSize = Math.max(12 / scale, 14);
+                const rotCenter = { x: b.x + b.w/2, y: b.y - 22/scale };
+                if (Math.hypot(p.x - rotCenter.x, p.y - rotCenter.y) < hSize) {
+                    isRotating = true;
+                    rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+                    return;
+                }
+                const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
+                for (let i = 0; i < corners.length; i++) {
+                    if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
+                        isResizing = true;
+                        resizeHandle = i;
+                        resizeStartBounds = { ...b };
+                        dragStartX = p.x; dragStartY = p.y;
+                        return;
+                    }
+                }
+                if (hitTestObject(p.x, p.y) === selectedObjectIndex) {
+                    isDraggingObject = true;
+                    dragStartX = p.x; dragStartY = p.y;
+                    dragOrigObj = JSON.parse(JSON.stringify(obj));
+                    redrawAll();
+                    return;
+                }
+            }
+        }
+
+        // Select tool
+        if (currentTool === 'select') {
+            const hit = hitTestObject(p.x, p.y);
+            if (hit >= 0) {
+                selectedObjectIndex = hit;
+                isDraggingObject = true;
+                dragStartX = p.x; dragStartY = p.y;
+                dragOrigObj = JSON.parse(JSON.stringify(objects[hit]));
+                redrawAll();
+            } else {
+                selectedObjectIndex = -1;
                 redrawAll();
             }
             return;
         }
-        if(isRotating && selectedObjectIndex>=0) {
+
+        // Edit mode select
+        if (editingEnabled) {
+            selectedObjectIndex = hitTestObject(p.x, p.y);
+            redrawAll();
+            return;
+        }
+
+        // Eraser tool (smart erase)
+        if (currentTool === 'eraser') {
+            drawing = true;
+            currentStrokePoints = [p];
+            return;
+        }
+
+        // Shape tools
+        if (['rect', 'circle', 'triangle', 'diamond', 'polygon', 'arrow', 'line'].includes(currentTool)) {
+            shapeStart = p;
+            currentShapeType = currentTool;
+            drawing = true;
+            return;
+        }
+
+        // Pen / marker / highlighter
+        drawing = true;
+        currentStrokePoints = [p];
+        saveHistory();
+    }
+
+    function handleMove(e) {
+        if (isDraggingVertex && selectedObjectIndex >= 0 && objects[selectedObjectIndex] && objects[selectedObjectIndex].type === 'shape' && objects[selectedObjectIndex].shapeType === 'polygon') {
             const p = getCanvasCoords(e);
-            const b = getObjectBounds(currentStrokes[selectedObjectIndex]);
-            if(b) {
+            objects[selectedObjectIndex].data.points[vertexIndex] = { x: p.x, y: p.y };
+            redrawAll();
+            return;
+        }
+        if (isRotating && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            const b = getObjectBounds(obj);
+            if (b) {
                 const newAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
-                const delta = (newAngle - rotateStartAngle)*180/Math.PI;
-                // rotation for polygon: rotate points around center
-                const obj = currentStrokes[selectedObjectIndex];
-                if(obj.type==='shape' && obj.shapeType==='polygon') {
-                    const center = {x: b.cx, y: b.cy};
+                const delta = (newAngle - rotateStartAngle) * 180 / Math.PI;
+                if (obj.type === 'shape' && obj.shapeType === 'polygon') {
+                    const center = { x: b.cx, y: b.cy };
                     obj.data.points = obj.data.points.map(pt => {
                         let dx = pt.x - center.x, dy = pt.y - center.y;
-                        let cos = Math.cos(delta*Math.PI/180), sin = Math.sin(delta*Math.PI/180);
+                        let rad = delta * Math.PI/180;
+                        let cos = Math.cos(rad), sin = Math.sin(rad);
                         return { x: center.x + dx*cos - dy*sin, y: center.y + dx*sin + dy*cos };
                     });
-                } else if(obj.type==='image') {
-                    if(!obj.rotation) obj.rotation=0;
-                    obj.rotation += delta;
+                } else if (obj.type === 'image') {
+                    // rotation not fully implemented, but keep for later
                 }
                 rotateStartAngle = newAngle;
                 redrawAll();
             }
             return;
         }
-        if(isResizing && selectedObjectIndex>=0) {
+        if (isResizing && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
-            const obj = currentStrokes[selectedObjectIndex];
+            const obj = objects[selectedObjectIndex];
             const dx = p.x - dragStartX, dy = p.y - dragStartY;
             const orig = resizeStartBounds;
-            if(obj.type==='image') {
-                let newW = orig.w + (resizeHandle%2===0 ? -dx : dx);
-                let newH = orig.h + (resizeHandle<2 ? -dy : dy);
-                if(newW>5 && newH>5) {
+            if (obj.type === 'image') {
+                let newW = orig.w + (resizeHandle % 2 === 0 ? -dx : dx);
+                let newH = orig.h + (resizeHandle < 2 ? -dy : dy);
+                if (newW > 5 && newH > 5) {
                     obj.w = newW; obj.h = newH;
-                    obj.x = orig.x + (resizeHandle===0?dx:resizeHandle===2?dx:0);
-                    obj.y = orig.y + (resizeHandle===0?dy:resizeHandle===1?dy:0);
+                    obj.x = orig.x + (resizeHandle === 0 ? dx : resizeHandle === 2 ? dx : 0);
+                    obj.y = orig.y + (resizeHandle === 0 ? dy : resizeHandle === 1 ? dy : 0);
                     redrawAll(); saveHistory();
                 }
-            } else if(obj.type==='shape') {
-                // scale shape points (simplified)
-                const scaleX = (orig.w + (resizeHandle%2===0 ? -dx : dx)) / orig.w;
-                const scaleY = (orig.h + (resizeHandle<2 ? -dy : dy)) / orig.h;
-                if(scaleX>0.1 && scaleY>0.1 && obj.shapeType==='polygon') {
-                    obj.data.points = dragOrigObj.data.points.map(p => ({
-                        x: orig.cx + (p.x - orig.cx)*scaleX,
-                        y: orig.cy + (p.y - orig.cy)*scaleY
-                    }));
-                    redrawAll(); saveHistory();
+            } else if (obj.type === 'shape') {
+                if (obj.shapeType === 'rect') {
+                    if (resizeHandle === 0) { obj.data.x = orig.x + dx; obj.data.y = orig.y + dy; obj.data.w = orig.w - dx; obj.data.h = orig.h - dy; }
+                    else if (resizeHandle === 1) { obj.data.y = orig.y + dy; obj.data.w = orig.w + dx; obj.data.h = orig.h - dy; }
+                    else if (resizeHandle === 2) { obj.data.x = orig.x + dx; obj.data.w = orig.w - dx; obj.data.h = orig.h + dy; }
+                    else if (resizeHandle === 3) { obj.data.w = orig.w + dx; obj.data.h = orig.h + dy; }
+                    if (obj.data.w < 5) obj.data.w = 5; if (obj.data.h < 5) obj.data.h = 5;
+                } else if (obj.shapeType === 'polygon') {
+                    const scaleX = (orig.w + (resizeHandle % 2 === 0 ? -dx : dx)) / orig.w;
+                    const scaleY = (orig.h + (resizeHandle < 2 ? -dy : dy)) / orig.h;
+                    if (scaleX > 0.1 && scaleY > 0.1) {
+                        obj.data.points = dragOrigObj.data.points.map(p => ({
+                            x: orig.cx + (p.x - orig.cx) * scaleX,
+                            y: orig.cy + (p.y - orig.cy) * scaleY
+                        }));
+                    }
                 }
+                redrawAll();
             }
             return;
         }
-        if(isDraggingObject && selectedObjectIndex>=0) {
+        if (isDraggingObject && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const dx = p.x - dragStartX, dy = p.y - dragStartY;
-            const obj = currentStrokes[selectedObjectIndex];
-            if(obj.type==='image') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
-            else if(obj.type==='text') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
-            else if(obj.type==='shape') {
-                if(obj.shapeType==='rect') { obj.data.x = dragOrigObj.data.x + dx; obj.data.y = dragOrigObj.data.y + dy; }
-                else if(obj.shapeType==='circle') { obj.data.cx = dragOrigObj.data.cx + dx; obj.data.cy = dragOrigObj.data.cy + dy; }
-                else if(obj.shapeType==='triangle') {
-                    obj.data.x1 = dragOrigObj.data.x1+dx; obj.data.y1 = dragOrigObj.data.y1+dy;
-                    obj.data.x2 = dragOrigObj.data.x2+dx; obj.data.y2 = dragOrigObj.data.y2+dy;
-                    obj.data.x3 = dragOrigObj.data.x3+dx; obj.data.y3 = dragOrigObj.data.y3+dy;
-                } else if(obj.shapeType==='arrow' || obj.shapeType==='line') {
-                    obj.data.x1 = dragOrigObj.data.x1+dx; obj.data.y1 = dragOrigObj.data.y1+dy;
-                    obj.data.x2 = dragOrigObj.data.x2+dx; obj.data.y2 = dragOrigObj.data.y2+dy;
-                } else if(obj.shapeType==='diamond') {
-                    obj.data.cx = dragOrigObj.data.cx+dx; obj.data.cy = dragOrigObj.data.cy+dy;
-                } else if(obj.shapeType==='polygon') {
-                    obj.data.points = dragOrigObj.data.points.map(p => ({x: p.x+dx, y: p.y+dy}));
+            const obj = objects[selectedObjectIndex];
+            if (obj.type === 'image') {
+                obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy;
+            } else if (obj.type === 'text') {
+                obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy;
+            } else if (obj.type === 'shape') {
+                if (obj.shapeType === 'rect') { obj.data.x = dragOrigObj.data.x + dx; obj.data.y = dragOrigObj.data.y + dy; }
+                else if (obj.shapeType === 'circle') { obj.data.cx = dragOrigObj.data.cx + dx; obj.data.cy = dragOrigObj.data.cy + dy; }
+                else if (obj.shapeType === 'triangle') {
+                    obj.data.x1 = dragOrigObj.data.x1 + dx; obj.data.y1 = dragOrigObj.data.y1 + dy;
+                    obj.data.x2 = dragOrigObj.data.x2 + dx; obj.data.y2 = dragOrigObj.data.y2 + dy;
+                    obj.data.x3 = dragOrigObj.data.x3 + dx; obj.data.y3 = dragOrigObj.data.y3 + dy;
+                } else if (obj.shapeType === 'arrow' || obj.shapeType === 'line') {
+                    obj.data.x1 = dragOrigObj.data.x1 + dx; obj.data.y1 = dragOrigObj.data.y1 + dy;
+                    obj.data.x2 = dragOrigObj.data.x2 + dx; obj.data.y2 = dragOrigObj.data.y2 + dy;
+                } else if (obj.shapeType === 'diamond') {
+                    obj.data.cx = dragOrigObj.data.cx + dx; obj.data.cy = dragOrigObj.data.cy + dy;
+                } else if (obj.shapeType === 'polygon') {
+                    obj.data.points = dragOrigObj.data.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
                 }
-            } else if(obj.type==='stroke') {
-                obj.points = dragOrigObj.points.map(p => ({x: p.x+dx, y: p.y+dy}));
+            } else if (obj.type === 'stroke') {
+                obj.points = dragOrigObj.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
             }
-            redrawAll(); saveHistory();
+            redrawAll();
             return;
         }
-        if(!drawing) return;
+        if (!drawing) return;
         e.preventDefault();
         const p = getCanvasCoords(e);
-        if(currentShapeType && shapeStart) {
+
+        // Shape preview
+        if (currentShapeType && shapeStart) {
             redrawAll();
             bottomCtx.save();
-            bottomCtx.setTransform(scale,0,0,scale,offsetX,offsetY);
+            bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
             bottomCtx.strokeStyle = penColor;
-            bottomCtx.lineWidth = penSize/scale;
+            bottomCtx.lineWidth = penSize / scale;
             const w = p.x - shapeStart.x, h = p.y - shapeStart.y;
-            if(currentShapeType === 'rect') bottomCtx.strokeRect(shapeStart.x, shapeStart.y, w, h);
-            else if(currentShapeType === 'circle') { let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; bottomCtx.beginPath(); bottomCtx.ellipse(cx,cy,Math.abs(w)/2,Math.abs(h)/2,0,0,2*Math.PI); bottomCtx.stroke(); }
-            else if(currentShapeType === 'triangle') { let cx=shapeStart.x+w/2; bottomCtx.beginPath(); bottomCtx.moveTo(cx,shapeStart.y); bottomCtx.lineTo(shapeStart.x,shapeStart.y+h); bottomCtx.lineTo(shapeStart.x+w,shapeStart.y+h); bottomCtx.closePath(); bottomCtx.stroke(); }
-            else if(currentShapeType === 'diamond') { let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; bottomCtx.beginPath(); bottomCtx.moveTo(cx,shapeStart.y); bottomCtx.lineTo(shapeStart.x+w,cy); bottomCtx.lineTo(cx,shapeStart.y+h); bottomCtx.lineTo(shapeStart.x,cy); bottomCtx.closePath(); bottomCtx.stroke(); }
-            else if(currentShapeType === 'polygon') { let sides=customPolygonSides; let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; let rad=Math.min(Math.abs(w),Math.abs(h))/2; let pts=generatePolygonPoints(cx,cy,rad,sides); bottomCtx.beginPath(); bottomCtx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) bottomCtx.lineTo(pts[i].x,pts[i].y); bottomCtx.closePath(); bottomCtx.stroke(); }
-            else if(currentShapeType === 'arrow' || currentShapeType === 'line') { bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x,shapeStart.y); bottomCtx.lineTo(p.x,p.y); bottomCtx.stroke(); if(currentShapeType==='arrow'){ let ang=Math.atan2(p.y-shapeStart.y, p.x-shapeStart.x); let sz=Math.min(20/scale,Math.hypot(w,h)*0.25); bottomCtx.beginPath(); bottomCtx.moveTo(p.x,p.y); bottomCtx.lineTo(p.x-sz*Math.cos(ang-Math.PI/6), p.y-sz*Math.sin(ang-Math.PI/6)); bottomCtx.moveTo(p.x,p.y); bottomCtx.lineTo(p.x-sz*Math.cos(ang+Math.PI/6), p.y-sz*Math.sin(ang+Math.PI/6)); bottomCtx.stroke(); } }
+            if (currentShapeType === 'rect') bottomCtx.strokeRect(shapeStart.x, shapeStart.y, w, h);
+            else if (currentShapeType === 'circle') { let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; bottomCtx.beginPath(); bottomCtx.ellipse(cx,cy,Math.abs(w)/2,Math.abs(h)/2,0,0,2*Math.PI); bottomCtx.stroke(); }
+            else if (currentShapeType === 'triangle') { let cx=shapeStart.x+w/2; bottomCtx.beginPath(); bottomCtx.moveTo(cx,shapeStart.y); bottomCtx.lineTo(shapeStart.x,shapeStart.y+h); bottomCtx.lineTo(shapeStart.x+w,shapeStart.y+h); bottomCtx.closePath(); bottomCtx.stroke(); }
+            else if (currentShapeType === 'diamond') { let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; bottomCtx.beginPath(); bottomCtx.moveTo(cx,shapeStart.y); bottomCtx.lineTo(shapeStart.x+w,cy); bottomCtx.lineTo(cx,shapeStart.y+h); bottomCtx.lineTo(shapeStart.x,cy); bottomCtx.closePath(); bottomCtx.stroke(); }
+            else if (currentShapeType === 'polygon') { let sides=customPolygonSides; let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; let rad=Math.min(Math.abs(w),Math.abs(h))/2; let pts=generatePolygonPoints(cx,cy,rad,sides); bottomCtx.beginPath(); bottomCtx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) bottomCtx.lineTo(pts[i].x,pts[i].y); bottomCtx.closePath(); bottomCtx.stroke(); }
+            else if (currentShapeType === 'arrow' || currentShapeType === 'line') { bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x,shapeStart.y); bottomCtx.lineTo(p.x,p.y); bottomCtx.stroke(); if(currentShapeType==='arrow'){ let ang=Math.atan2(p.y-shapeStart.y, p.x-shapeStart.x); let sz=Math.min(20/scale,Math.hypot(w,h)*0.25); bottomCtx.beginPath(); bottomCtx.moveTo(p.x,p.y); bottomCtx.lineTo(p.x-sz*Math.cos(ang-Math.PI/6), p.y-sz*Math.sin(ang-Math.PI/6)); bottomCtx.moveTo(p.x,p.y); bottomCtx.lineTo(p.x-sz*Math.cos(ang+Math.PI/6), p.y-sz*Math.sin(ang+Math.PI/6)); bottomCtx.stroke(); } }
             bottomCtx.restore();
             return;
         }
-        if(Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y) > 1) {
-            currentStrokePoints.push({x:p.x, y:p.y});
-            lastPoint = p;
-            // Draw temporary stroke on canvas? We'll redrawAll with currentStrokePoints as temporary stroke
-            // We'll store a temporary stroke object and redraw.
-            if(!window._tempStroke) window._tempStroke = { points: [], color: penColor, width: penSize, tool: currentTool, opacity: opacity, type: 'stroke' };
-            window._tempStroke.points = [...currentStrokePoints];
+
+        // Freehand / eraser
+        currentStrokePoints.push(p);
+        if (currentTool === 'eraser') {
+            // show eraser preview by drawing temporary white circles? Not needed, just erase at end.
             redrawAll();
-            // Also draw the temp stroke on top
+            // draw temporary eraser indicator
+            bottomCtx.save();
+            bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+            bottomCtx.beginPath();
+            bottomCtx.arc(p.x, p.y, penSize * 1.5 / scale, 0, 2*Math.PI);
+            bottomCtx.fillStyle = 'rgba(255,255,255,0.5)';
+            bottomCtx.fill();
+            bottomCtx.restore();
+        } else {
+            // for pen/marker/highlighter, draw temporary stroke (but we will redraw all from vector at end)
+            redrawAll();
+            // draw temporary line on top
+            bottomCtx.save();
+            bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+            bottomCtx.beginPath();
+            bottomCtx.moveTo(currentStrokePoints[0].x, currentStrokePoints[0].y);
+            for (let i = 1; i < currentStrokePoints.length; i++) bottomCtx.lineTo(currentStrokePoints[i].x, currentStrokePoints[i].y);
+            bottomCtx.strokeStyle = penColor;
+            bottomCtx.lineWidth = (currentTool === 'highlighter' ? 20 : penSize) / scale;
+            bottomCtx.globalAlpha = opacity;
+            bottomCtx.stroke();
+            bottomCtx.restore();
         }
     }
-    
-    function endDraw(e) {
-        if(isDraggingVertex) { isDraggingVertex=false; saveHistory(); redrawAll(); return; }
-        if(isRotating || isResizing) { isRotating=isResizing=false; saveHistory(); redrawAll(); return; }
-        if(isDraggingObject) { isDraggingObject=false; saveHistory(); redrawAll(); return; }
-        if(!drawing && !currentShapeType) return;
+
+    function handleUp(e) {
+        if (isDraggingVertex) {
+            isDraggingVertex = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (isRotating || isResizing) {
+            isRotating = isResizing = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (isDraggingObject) {
+            isDraggingObject = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (!drawing && !currentShapeType) return;
         e.preventDefault();
-        if(currentShapeType && shapeStart) {
+
+        if (currentShapeType && shapeStart) {
             const p = getCanvasCoords(e);
-            if(Math.hypot(p.x-shapeStart.x, p.y-shapeStart.y) > 5) {
-                const w = p.x-shapeStart.x, h = p.y-shapeStart.y;
+            if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) > 5) {
+                const w = p.x - shapeStart.x, h = p.y - shapeStart.y;
                 let shapeData = null;
-                if(currentShapeType==='rect') shapeData = { x:Math.min(shapeStart.x,p.x), y:Math.min(shapeStart.y,p.y), w:Math.abs(w), h:Math.abs(h) };
-                else if(currentShapeType==='circle') shapeData = { cx: shapeStart.x+w/2, cy: shapeStart.y+h/2, rx:Math.abs(w)/2, ry:Math.abs(h)/2 };
-                else if(currentShapeType==='triangle') { let cx=shapeStart.x+w/2; shapeData = { x1:cx, y1:shapeStart.y, x2:shapeStart.x, y2:shapeStart.y+h, x3:shapeStart.x+w, y3:shapeStart.y+h }; }
-                else if(currentShapeType==='diamond') shapeData = { cx: shapeStart.x+w/2, cy: shapeStart.y+h/2, rx:Math.abs(w)/2, ry:Math.abs(h)/2 };
-                else if(currentShapeType==='arrow') shapeData = { x1:shapeStart.x, y1:shapeStart.y, x2:p.x, y2:p.y };
-                else if(currentShapeType==='line') shapeData = { x1:shapeStart.x, y1:shapeStart.y, x2:p.x, y2:p.y };
-                else if(currentShapeType==='polygon') { let sides=customPolygonSides; let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; let rad=Math.min(Math.abs(w),Math.abs(h))/2; let pts=generatePolygonPoints(cx,cy,rad,sides); shapeData = { points: pts }; }
-                if(shapeData) {
-                    currentStrokes.push({ type: 'shape', shapeType: currentShapeType, data: shapeData, color: penColor, width: penSize, opacity: opacity });
+                if (currentShapeType === 'rect') shapeData = { x: Math.min(shapeStart.x, p.x), y: Math.min(shapeStart.y, p.y), w: Math.abs(w), h: Math.abs(h) };
+                else if (currentShapeType === 'circle') shapeData = { cx: shapeStart.x + w/2, cy: shapeStart.y + h/2, rx: Math.abs(w)/2, ry: Math.abs(h)/2 };
+                else if (currentShapeType === 'triangle') { let cx = shapeStart.x + w/2; shapeData = { x1: cx, y1: shapeStart.y, x2: shapeStart.x, y2: shapeStart.y + h, x3: shapeStart.x + w, y3: shapeStart.y + h }; }
+                else if (currentShapeType === 'diamond') shapeData = { cx: shapeStart.x + w/2, cy: shapeStart.y + h/2, rx: Math.abs(w)/2, ry: Math.abs(h)/2 };
+                else if (currentShapeType === 'arrow') shapeData = { x1: shapeStart.x, y1: shapeStart.y, x2: p.x, y2: p.y };
+                else if (currentShapeType === 'line') shapeData = { x1: shapeStart.x, y1: shapeStart.y, x2: p.x, y2: p.y };
+                else if (currentShapeType === 'polygon') { let sides = customPolygonSides; let cx = shapeStart.x + w/2, cy = shapeStart.y + h/2; let rad = Math.min(Math.abs(w), Math.abs(h))/2; let pts = generatePolygonPoints(cx, cy, rad, sides); shapeData = { points: pts }; }
+                if (shapeData) {
+                    objects.push({ type: 'shape', shapeType: currentShapeType, data: shapeData, color: penColor, width: penSize, opacity: opacity });
                     saveHistory();
                 }
             }
-            currentShapeType = null; shapeStart = null; drawing = false; redrawAll(); return;
+            currentShapeType = null; shapeStart = null; drawing = false;
+            redrawAll();
+            return;
         }
-        if(currentStrokePoints.length > 0) {
-            let strokeObj = { type: 'stroke', points: [...currentStrokePoints], color: penColor, width: penSize, tool: currentTool, opacity: opacity };
-            currentStrokes.push(strokeObj);
-            saveHistory();
-            currentStrokePoints = [];
+
+        if (currentTool === 'eraser') {
+            if (currentStrokePoints.length > 0) {
+                const tolerance = penSize * 2.5;
+                eraseStrokesNearPath(currentStrokePoints, tolerance);
+            }
+        } else {
+            if (currentStrokePoints.length > 0) {
+                let strokeTool = currentTool;
+                objects.push({ type: 'stroke', points: [...currentStrokePoints], color: penColor, width: penSize, tool: strokeTool, opacity: opacity });
+                saveHistory();
+            }
         }
         drawing = false;
-        window._tempStroke = null;
+        currentStrokePoints = [];
         redrawAll();
     }
-    
-    function hitTestVertex(points, px, py) {
-        const threshold = Math.max(15/scale, 18);
-        for(let i=0;i<points.length;i++) {
-            if(Math.hypot(px-points[i].x, py-points[i].y) < threshold) return i;
-        }
-        return -1;
-    }
-    
-    function generatePolygonPoints(cx, cy, radius, sides, rot=0) {
-        let pts = [];
-        let step = 2*Math.PI/sides;
-        for(let i=0;i<sides;i++) {
-            let angle = i*step - Math.PI/2 + rot*Math.PI/180;
-            pts.push({ x: cx + radius*Math.cos(angle), y: cy + radius*Math.sin(angle) });
-        }
-        return pts;
-    }
-    
-    // Placeholder for floodFill (not implemented in vector version - we can keep raster flood fill on a separate layer but for simplicity we skip)
-    function floodFill(x,y) { alert("Flood fill works on raster layer only; not implemented in vector mode."); }
-    
+
     // ========== PDF RENDERING ==========
     async function renderPDFPageHighRes(pageNum) {
         if (!pdfDoc) return;
@@ -820,18 +916,16 @@
         const w = viewport.width, h = viewport.height;
         setCanvasSize(w, h);
         bgCtx.fillStyle = 'white';
-        bgCtx.fillRect(0,0,w,h);
+        bgCtx.fillRect(0, 0, w, h);
         await page.render({ canvasContext: bgCtx, viewport }).promise;
-        // Load strokes for this page
-        if (pageStrokes[pageNum]) currentStrokes = pageStrokes[pageNum];
-        else currentStrokes = [];
+        if (pageObjects[pageNum]) objects = pageObjects[pageNum];
+        else objects = [];
         selectedObjectIndex = -1;
-        hasPDF = true;
+        redrawAll();
         document.getElementById('pdfPageNav').style.display = 'flex';
         document.getElementById('pageIndicator').innerText = `${pageNum}/${totalPages}`;
-        redrawAll();
     }
-    
+
     function loadPDF(file) {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -839,89 +933,77 @@
             pdfDoc = await pdfjsLib.getDocument(typedArray).promise;
             totalPages = pdfDoc.numPages;
             currentPageNum = 1;
-            pageStrokes = {};
+            pageObjects = {};
             await renderPDFPageHighRes(1);
         };
         reader.readAsArrayBuffer(file);
     }
-    document.getElementById('pdfFile').addEventListener('change', e => { if(e.target.files[0]) loadPDF(e.target.files[0]); });
-    async function changePage(delta) {
-        if(!pdfDoc) return;
-        let newPage = currentPageNum + delta;
-        if(newPage>=1 && newPage<=totalPages) {
-            pageStrokes[currentPageNum] = currentStrokes;
-            currentPageNum = newPage;
-            await renderPDFPageHighRes(currentPageNum);
-        }
-    }
-    document.getElementById('prevPageBtn').onclick = () => changePage(-1);
-    document.getElementById('nextPageBtn').onclick = () => changePage(1);
-    
+
     // ========== UI BINDINGS ==========
-    document.getElementById('drawBtn').onclick = () => { currentTool='draw'; currentShapeType=null; highlightTool('drawBtn'); redrawAll(); };
-    document.getElementById('markerBtn').onclick = () => { currentTool='marker'; currentShapeType=null; highlightTool('markerBtn'); redrawAll(); };
-    document.getElementById('highlighterBtn').onclick = () => { currentTool='highlighter'; currentShapeType=null; highlightTool('highlighterBtn'); redrawAll(); };
-    document.getElementById('eraseBtn').onclick = () => { currentTool='eraser'; currentShapeType=null; highlightTool('eraseBtn'); redrawAll(); };
-    document.getElementById('fillBtn').onclick = () => { currentTool='fill'; currentShapeType=null; highlightTool('fillBtn'); };
-    document.getElementById('selectBtn').onclick = () => { currentTool='select'; currentShapeType=null; highlightTool('selectBtn'); redrawAll(); };
-    document.getElementById('rectBtn').onclick = () => { currentTool='rect'; currentShapeType='rect'; highlightTool('rectBtn'); };
-    document.getElementById('circleBtn').onclick = () => { currentTool='circle'; currentShapeType='circle'; highlightTool('circleBtn'); };
-    document.getElementById('triangleBtn').onclick = () => { currentTool='triangle'; currentShapeType='triangle'; highlightTool('triangleBtn'); };
-    document.getElementById('diamondBtn').onclick = () => { currentTool='diamond'; currentShapeType='diamond'; highlightTool('diamondBtn'); };
-    document.getElementById('polygonBtn').onclick = () => { customPolygonSides = parseInt(document.getElementById('polygonSides').value) || 5; currentTool='polygon'; currentShapeType='polygon'; highlightTool('polygonBtn'); };
-    document.getElementById('arrowBtn').onclick = () => { currentTool='arrow'; currentShapeType='arrow'; highlightTool('arrowBtn'); };
-    document.getElementById('lineBtn').onclick = () => { currentTool='line'; currentShapeType='line'; highlightTool('lineBtn'); };
-    document.getElementById('editToggleBtn').onclick = () => { editingEnabled = !editingEnabled; vertexEditEnabled=false; document.getElementById('editToggleBtn').classList.toggle('active', editingEnabled); document.getElementById('vertexEditBtn').classList.remove('active'); redrawAll(); };
-    document.getElementById('vertexEditBtn').onclick = () => { vertexEditEnabled = !vertexEditEnabled; editingEnabled=true; document.getElementById('vertexEditBtn').classList.toggle('active', vertexEditEnabled); document.getElementById('editToggleBtn').classList.add('active'); redrawAll(); };
-    document.getElementById('textBtn').onclick = () => { let t=prompt('Enter text:','Text'); if(t){ currentStrokes.push({ type:'text', text:t, x:bgCanvas.width/2, y:bgCanvas.height/2, fontSize:20, color:penColor }); saveHistory(); redrawAll(); } };
-    document.getElementById('rotateLeftBtn').onclick = () => { if(selectedObjectIndex>=0){ /* implement rotation */ } };
-    document.getElementById('rotateRightBtn').onclick = () => { if(selectedObjectIndex>=0){ /* implement rotation */ } };
-    document.getElementById('deleteObjBtn').onclick = () => { if(selectedObjectIndex>=0){ currentStrokes.splice(selectedObjectIndex,1); selectedObjectIndex=-1; saveHistory(); redrawAll(); } };
+    function setTool(t) {
+        currentTool = t;
+        document.querySelectorAll('#drawBtn, #markerBtn, #highlighterBtn, #eraseBtn, #selectBtn, #rectBtn, #circleBtn, #triangleBtn, #diamondBtn, #polygonBtn, #arrowBtn, #lineBtn').forEach(btn => btn.classList.remove('active'));
+        const map = { 'draw':'drawBtn', 'marker':'markerBtn', 'highlighter':'highlighterBtn', 'eraser':'eraseBtn', 'select':'selectBtn', 'rect':'rectBtn', 'circle':'circleBtn', 'triangle':'triangleBtn', 'diamond':'diamondBtn', 'polygon':'polygonBtn', 'arrow':'arrowBtn', 'line':'lineBtn' };
+        if (map[t]) document.getElementById(map[t]).classList.add('active');
+        redrawAll();
+    }
+
+    document.getElementById('drawBtn').onclick = () => setTool('draw');
+    document.getElementById('markerBtn').onclick = () => setTool('marker');
+    document.getElementById('highlighterBtn').onclick = () => setTool('highlighter');
+    document.getElementById('eraseBtn').onclick = () => setTool('eraser');
+    document.getElementById('selectBtn').onclick = () => setTool('select');
+    document.getElementById('rectBtn').onclick = () => setTool('rect');
+    document.getElementById('circleBtn').onclick = () => setTool('circle');
+    document.getElementById('triangleBtn').onclick = () => setTool('triangle');
+    document.getElementById('diamondBtn').onclick = () => setTool('diamond');
+    document.getElementById('polygonBtn').onclick = () => { customPolygonSides = parseInt(document.getElementById('polygonSides').value) || 5; setTool('polygon'); };
+    document.getElementById('arrowBtn').onclick = () => setTool('arrow');
+    document.getElementById('lineBtn').onclick = () => setTool('line');
+    document.getElementById('editToggleBtn').onclick = () => { editingEnabled = !editingEnabled; vertexEditEnabled = false; document.getElementById('editToggleBtn').classList.toggle('active', editingEnabled); document.getElementById('vertexEditBtn').classList.remove('active'); redrawAll(); };
+    document.getElementById('vertexEditBtn').onclick = () => { vertexEditEnabled = !vertexEditEnabled; editingEnabled = true; document.getElementById('vertexEditBtn').classList.toggle('active', vertexEditEnabled); document.getElementById('editToggleBtn').classList.add('active'); redrawAll(); };
+    document.getElementById('textBtn').onclick = () => { const t = prompt('Enter text:', 'Text'); if (t) { objects.push({ type: 'text', text: t, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: penSize*5, color: penColor }); redrawAll(); saveHistory(); } };
+    document.getElementById('rotateLeftBtn').onclick = () => { if (selectedObjectIndex >= 0) { /* implement later */ } };
+    document.getElementById('rotateRightBtn').onclick = () => { if (selectedObjectIndex >= 0) { /* implement later */ } };
+    document.getElementById('deleteObjBtn').onclick = () => { if (selectedObjectIndex >= 0) { objects.splice(selectedObjectIndex, 1); selectedObjectIndex = -1; saveHistory(); redrawAll(); } };
     document.getElementById('undoBtn').onclick = undo;
     document.getElementById('redoBtn').onclick = redo;
-    document.getElementById('clearBtn').onclick = () => { if(confirm('Clear all?')){ currentStrokes=[]; selectedObjectIndex=-1; saveHistory(); redrawAll(); } };
-    document.getElementById('penColor').oninput = e => penColor=e.target.value;
-    document.getElementById('brushSize').oninput = e => { penSize=+e.target.value; document.getElementById('sizeLabel').innerText=penSize+'px'; };
-    document.getElementById('opacitySlider').oninput = e => opacity=+e.target.value;
+    document.getElementById('clearBtn').onclick = () => { if (confirm('Clear all?')) { objects = []; selectedObjectIndex = -1; saveHistory(); redrawAll(); } };
+    document.getElementById('penColor').oninput = e => penColor = e.target.value;
+    document.getElementById('brushSize').oninput = e => { penSize = +e.target.value; document.getElementById('sizeLabel').textContent = penSize+'px'; };
+    document.getElementById('opacitySlider').oninput = e => opacity = +e.target.value;
     document.getElementById('themeBtn').onclick = () => document.body.classList.toggle('light');
-    document.getElementById('exportImgBtn').onclick = () => { let a=document.createElement('a'); a.download='board.png'; a.href=topCanvas.toDataURL(); a.click(); };
-    document.getElementById('recordBtn').onclick = toggleRecording;
-    document.getElementById('micBtn').onclick = toggleMic;
-    // color palette etc...
+    document.getElementById('exportImgBtn').onclick = () => { const a = document.createElement('a'); a.download = 'board.png'; a.href = topCanvas.toDataURL(); a.click(); };
+    document.getElementById('recordBtn').onclick = async () => { if (isRecording) { mediaRecorder?.stop(); isRecording = false; document.getElementById('recIndicator').style.display = 'none'; document.getElementById('recordBtn').innerHTML = '🔴 Rec'; return; } try { const stream = topCanvas.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' }); recordedChunks = []; mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); }; mediaRecorder.onstop = () => { const blob = new Blob(recordedChunks, { type: 'video/webm' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `whiteboard-${Date.now()}.webm`; a.click(); }; mediaRecorder.start(1000); isRecording = true; document.getElementById('recIndicator').style.display = 'block'; document.getElementById('recordBtn').innerHTML = '⏹️ Stop'; } catch (e) { alert('Recording error'); } };
+    document.getElementById('micBtn').onclick = async () => { if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; micEnabled = false; document.getElementById('micBtn').classList.remove('active'); } else { try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); micEnabled = true; document.getElementById('micBtn').classList.add('active'); } catch (e) { alert('Mic access denied'); } } };
+
+    // Color palette
     const colors = ['#000000','#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#ffffff'];
     const paletteDiv = document.getElementById('colorPalette');
-    colors.forEach(c => { let swatch=document.createElement('div'); swatch.className='color-swatch'; swatch.style.backgroundColor=c; swatch.onclick=()=>{ penColor=c; document.getElementById('penColor').value=c; }; paletteDiv.appendChild(swatch); });
-    
+    colors.forEach(c => { let swatch = document.createElement('div'); swatch.className = 'color-swatch'; swatch.style.backgroundColor = c; swatch.onclick = () => { penColor = c; document.getElementById('penColor').value = c; }; paletteDiv.appendChild(swatch); });
+
+    // File handlers
+    document.getElementById('pdfFile').addEventListener('change', e => { if(e.target.files[0]) loadPDF(e.target.files[0]); });
     document.getElementById('imgFile').addEventListener('change', e => {
         const file = e.target.files[0];
-        if(!file) return;
+        if (!file) return;
         const img = new Image();
         img.onload = () => {
-            const w = Math.min(300, bgCanvas.width*0.35);
-            const h = w * (img.height/img.width);
-            currentStrokes.push({ type:'image', imgElement:img, x:(bgCanvas.width-w)/2, y:(bgCanvas.height-h)/2, w:w, h:h });
+            const w = Math.min(300, bgCanvas.width * 0.35);
+            const h = w * (img.height / img.width);
+            objects.push({ type: 'image', img: img, x: (bgCanvas.width - w)/2, y: (bgCanvas.height - h)/2, w: w, h: h });
             saveHistory(); redrawAll();
         };
         img.src = URL.createObjectURL(file);
     });
-    
-    document.getElementById('latexBtn').onclick = () => document.getElementById('latexModal').style.display='flex';
-    document.getElementById('closeLatexModal').onclick = () => document.getElementById('latexModal').style.display='none';
-    document.getElementById('insertLatexBtn').onclick = () => {
-        const latex = document.getElementById('latexInput').value.trim();
-        if(latex) alert("LaTeX inserted: "+latex);
-        document.getElementById('latexModal').style.display='none';
-    };
+    document.getElementById('latexBtn').onclick = () => document.getElementById('latexModal').style.display = 'flex';
+    document.getElementById('closeLatexModal').onclick = () => document.getElementById('latexModal').style.display = 'none';
+    document.getElementById('insertLatexBtn').onclick = () => { const latex = document.getElementById('latexInput').value.trim(); if(latex) alert("LaTeX inserted: " + latex); document.getElementById('latexModal').style.display = 'none'; };
     document.getElementById('toggleSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
     document.getElementById('slidePanelBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
     document.getElementById('closeSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.remove('open');
-    
-    function highlightTool(activeId) {
-        ['drawBtn','markerBtn','highlighterBtn','eraseBtn','fillBtn','selectBtn','rectBtn','circleBtn','triangleBtn','diamondBtn','polygonBtn','arrowBtn','lineBtn'].forEach(id => document.getElementById(id).classList.remove('active'));
-        document.getElementById(activeId).classList.add('active');
-    }
-    
-    // ========== ZOOM & PAN ==========
+
+    // Zoom & Pan
     bottomCanvas.addEventListener('wheel', e => {
         e.preventDefault();
         const rect = bottomCanvas.getBoundingClientRect();
@@ -937,88 +1019,28 @@
         scale = newScale;
         redrawAll();
     }, { passive: false });
-    
+
     let isPanning = false, panStartX, panStartY, panStartOffX, panStartOffY;
-    bottomCanvas.addEventListener('mousedown', e => {
-        if(e.button===2) {
-            isPanning=true;
-            panStartX=e.clientX; panStartY=e.clientY;
-            panStartOffX=offsetX; panStartOffY=offsetY;
-            e.preventDefault();
-        }
-    });
-    window.addEventListener('mousemove', e => {
-        if(isPanning) {
-            offsetX = panStartOffX + (e.clientX - panStartX);
-            offsetY = panStartOffY + (e.clientY - panStartY);
-            redrawAll();
-        }
-    });
-    window.addEventListener('mouseup', () => { isPanning=false; });
+    bottomCanvas.addEventListener('mousedown', e => { if (e.button === 2) { isPanning = true; panStartX = e.clientX; panStartY = e.clientY; panStartOffX = offsetX; panStartOffY = offsetY; e.preventDefault(); } });
+    window.addEventListener('mousemove', e => { if (isPanning) { offsetX = panStartOffX + (e.clientX - panStartX); offsetY = panStartOffY + (e.clientY - panStartY); redrawAll(); } });
+    window.addEventListener('mouseup', () => { isPanning = false; });
     bottomCanvas.addEventListener('contextmenu', e => e.preventDefault());
-    
-    function getTouchDistance(t1,t2){ return Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY); }
-    function getTouchMidpoint(t1,t2,canvas){
-        const rect=canvas.getBoundingClientRect();
-        return { x: ((t1.clientX+t2.clientX)/2 - rect.left) / rect.width * canvas.width, y: ((t1.clientY+t2.clientY)/2 - rect.top) / rect.height * canvas.height };
-    }
-    bottomCanvas.addEventListener('touchstart', e => {
-        e.preventDefault();
-        if(e.touches.length===1) handleDown(e);
-        else if(e.touches.length===2) {
-            isPinching=true;
-            initialPinchDist=getTouchDistance(e.touches[0],e.touches[1]);
-            initialScale=scale;
-            initialOffsetX=offsetX; initialOffsetY=offsetY;
-            pinchCenter = getTouchMidpoint(e.touches[0],e.touches[1],bottomCanvas);
-            panStartX = (e.touches[0].clientX+e.touches[1].clientX)/2;
-            panStartY = (e.touches[0].clientY+e.touches[1].clientY)/2;
-            twoFingerPan=true;
-        }
-    });
-    bottomCanvas.addEventListener('touchmove', e => {
-        e.preventDefault();
-        if(e.touches.length===1 && !isPinching) handleMove(e);
-        else if(e.touches.length===2 && isPinching) {
-            const newDist = getTouchDistance(e.touches[0],e.touches[1]);
-            const newMid = getTouchMidpoint(e.touches[0],e.touches[1],bottomCanvas);
-            if(initialPinchDist>0){
-                const zoom = newDist/initialPinchDist;
-                let newScale = initialScale * zoom;
-                newScale = Math.min(12, Math.max(0.2, newScale));
-                const worldX = (pinchCenter.x - initialOffsetX)/initialScale;
-                const worldY = (pinchCenter.y - initialOffsetY)/initialScale;
-                offsetX = pinchCenter.x - worldX*newScale;
-                offsetY = pinchCenter.y - worldY*newScale;
-                scale = newScale;
-                redrawAll();
-            }
-            const newPanX = (e.touches[0].clientX+e.touches[1].clientX)/2;
-            const newPanY = (e.touches[0].clientY+e.touches[1].clientY)/2;
-            if(twoFingerPan){
-                offsetX += newPanX - panStartX;
-                offsetY += newPanY - panStartY;
-                panStartX = newPanX; panStartY = newPanY;
-                redrawAll();
-            }
-        }
-    });
-    bottomCanvas.addEventListener('touchend', e => {
-        if(e.touches.length<2) { isPinching=false; twoFingerPan=false; initialPinchDist=0; }
-        if(e.touches.length===0) handleUp(e);
-    });
-    
-    // Recording stubs (keep original)
-    async function toggleRecording() { /* keep as before */ }
-    async function toggleMic() { /* keep as before */ }
-    
+
+    // Touch events
+    bottomCanvas.addEventListener('mousedown', handleDown);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    bottomCanvas.addEventListener('touchstart', e => { if (e.touches.length === 1) handleDown(e); }, { passive: false });
+    bottomCanvas.addEventListener('touchmove', e => { if (e.touches.length === 1) handleMove(e); }, { passive: false });
+    bottomCanvas.addEventListener('touchend', handleUp);
+
     // Initialize
     setCanvasSize(1200, 800);
     bgCtx.fillStyle = 'white';
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Vector strokes: zoom पर thickness constant रहेगी');
+    console.log('✅ Vector strokes: zoom पर thickness constant. Eraser = smart erase.');
 </script>
 </body>
 </html>
