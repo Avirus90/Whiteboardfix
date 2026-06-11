@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
-    <title>Whiteboard – Pinch Zoom + Drawing Fixed</title>
+    <title>Whiteboard – Constant Stroke Thickness + Default 2.5x Zoom</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -140,7 +140,7 @@
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
-<div class="info-banner" id="infoBanner">📌 Pinch to Zoom (2 fingers) on bottom canvas | Draw with one finger | Top canvas static</div>
+<div class="info-banner" id="infoBanner">📌 Stroke thickness constant on screen | Default zoom 2.5x | Highlighter thickness 20px</div>
 
 <!-- Middle Toolbar -->
 <div class="middle-toolbar" id="middleToolbar">
@@ -210,10 +210,10 @@
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ INTERACTIVE CANVAS (Pinch Zoom • Pan • Draw)</div>
+        <div class="card-header">✍️ INTERACTIVE CANVAS (Pinch Zoom • Pan • Constant Thickness)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
-            <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
+            <div class="status" id="bottomStatus">Zoom: 2.50x | Mode: Draw</div>
         </div>
     </div>
 </div>
@@ -256,9 +256,10 @@
     // ========== STATE ==========
     let currentTool = 'draw';
     let penColor = '#000000';
-    let penSize = 4;          // screen pixels (will be adjusted for zoom)
+    let penSize = 4;          // screen thickness in pixels
     let opacity = 1;
-    let scale = 1, offsetX = 0, offsetY = 0;   // for bottom canvas
+    let scale = 2.5;         // default zoom 2.5x (better handwriting)
+    let offsetX = 0, offsetY = 0;
 
     let objects = [];
     let editingEnabled = false;
@@ -293,21 +294,37 @@
         [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { c.width = w; c.height = h; });
         drawCtx.clearRect(0, 0, w, h);
         highlighterCtx.clearRect(0, 0, w, h);
-        scale = 1; offsetX = 0; offsetY = 0;
+        // Set default zoom to 2.5 and center the canvas
+        scale = 2.5;
+        offsetX = (w - w * scale) / 2;
+        offsetY = (h - h * scale) / 2;
         redrawAll();
     }
 
-    // Brush: line width in canvas space = penSize / scale (so screen thickness ~ penSize)
+    // Brush: line width in canvas space = penSize / scale (so screen thickness = penSize)
     function setBrush(ctx, tool = currentTool) {
-        const effectiveSize = Math.max(1, penSize / scale);  // ensure visible
+        const effectiveSize = Math.max(0.5, penSize / scale);  // ensure visible, constant screen thickness
         ctx.globalAlpha = opacity;
         ctx.lineWidth = effectiveSize;
         ctx.strokeStyle = penColor;
         ctx.fillStyle = penColor;
         ctx.globalCompositeOperation = 'source-over';
-        if (tool === 'marker') { ctx.globalAlpha = opacity * 0.75; ctx.lineWidth = effectiveSize * 1.3; }
-        else if (tool === 'highlighter') { ctx.globalAlpha = 0.25; ctx.lineWidth = effectiveSize * 2.5; }
-        else if (tool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = effectiveSize * 1.8; }
+        if (tool === 'marker') { 
+            ctx.globalAlpha = opacity * 0.75; 
+            ctx.lineWidth = effectiveSize * 1.3; 
+        }
+        else if (tool === 'highlighter') { 
+            // Highlighter screen thickness = 20px (so canvas thickness = 20 / scale)
+            const highlighterScreen = 20;  // fixed 20px thickness on screen
+            const highlighterCanvas = Math.max(0.5, highlighterScreen / scale);
+            ctx.globalAlpha = 0.25; 
+            ctx.lineWidth = highlighterCanvas;
+        }
+        else if (tool === 'eraser') { 
+            ctx.globalCompositeOperation = 'destination-out'; 
+            ctx.strokeStyle = 'rgba(0,0,0,1)'; 
+            ctx.lineWidth = effectiveSize * 1.8; 
+        }
     }
 
     // Generate regular polygon points
@@ -368,9 +385,11 @@
 
     function drawObject(ctx, obj) {
         ctx.save();
-        const screenLineWidth = (obj.lineWidth || penSize) / scale;
+        // For objects, we want screen thickness constant as well
+        const screenWidth = (obj.lineWidth || penSize);
+        const canvasWidth = Math.max(1, screenWidth / scale);
         ctx.strokeStyle = obj.strokeStyle || penColor;
-        ctx.lineWidth = Math.max(1, screenLineWidth);
+        ctx.lineWidth = canvasWidth;
         ctx.globalAlpha = obj.opacity || opacity;
         
         if (obj.type === 'rect') {
@@ -415,7 +434,9 @@
             ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
         }
         else if (obj.type === 'text') {
-            ctx.font = `${Math.max(8, (obj.fontSize || 20) / scale)}px "Segoe UI"`;
+            const screenFont = Math.max(8, (obj.fontSize || 20));
+            const canvasFont = screenFont / scale;
+            ctx.font = `${canvasFont}px "Segoe UI"`;
             ctx.fillStyle = obj.color || penColor;
             ctx.fillText(obj.text, obj.x, obj.y);
         }
@@ -1207,7 +1228,7 @@
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Pinch zoom fixed. Draw on bottom canvas with zoom, top canvas static.');
+    console.log('✅ Zoom fixed: constant stroke thickness, default zoom 2.5x, highlighter 20px');
 </script>
 </body>
 </html>
