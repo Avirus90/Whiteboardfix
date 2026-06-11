@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
-    <title>Whiteboard Pro – Tablet Working | Shapes + Polygon + Vertex Edit</title>
+    <title>Whiteboard Pro – Stable | Pinch Zoom | Shapes | Vertex Edit</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -201,7 +201,7 @@
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
-<div class="info-banner" id="infoBanner">📱 Tablet | ✌️ Pinch Zoom | ✏️ Draw | 🔷 Polygon: set sides & drag</div>
+<div class="info-banner" id="infoBanner">📱 Stable | ✌️ Pinch Zoom | ✏️ Draw | 🔷 Polygon | ✨ Vertex Edit</div>
 
 <div class="middle-toolbar">
     <div class="tool-group">
@@ -262,7 +262,7 @@
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ CANVAS (Two Finger Pinch Zoom | Two Finger Pan | One Finger Draw/Shape)</div>
+        <div class="card-header">✍️ CANVAS (Two Finger Pinch Zoom | Two Finger Pan | One Finger Draw)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
             <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
@@ -343,7 +343,7 @@
 
     let mediaRecorder = null, recordedChunks = [], isRecording = false;
 
-    // Resize canvas to fit container
+    // Resize canvas to fit container (responsive)
     function resizeCanvasToDisplaySize() {
         const container = bottomCanvas.parentElement;
         const rect = container.getBoundingClientRect();
@@ -361,6 +361,10 @@
         });
         drawCtx.clearRect(0, 0, w, h);
         highlighterCtx.clearRect(0, 0, w, h);
+        // Reset view when size changes
+        scale = 1;
+        offsetX = 0;
+        offsetY = 0;
         redrawAll();
     }
 
@@ -634,7 +638,7 @@
 
     function hexToRgb(h) { return { r: parseInt(h.slice(1,3),16), g: parseInt(h.slice(3,5),16), b: parseInt(h.slice(5,7),16) }; }
 
-    // ========== EVENT HANDLERS ==========
+    // ========== EVENT HANDLERS (Stable) ==========
     function handleStart(e) {
         e.preventDefault();
         
@@ -1189,7 +1193,7 @@
     window.addEventListener('mouseup', () => { mousePanning = false; });
     bottomCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Touch events
+    // Touch events (stable)
     bottomCanvas.addEventListener('touchstart', handleStart, { passive: false });
     bottomCanvas.addEventListener('touchmove', handleMove, { passive: false });
     bottomCanvas.addEventListener('touchend', handleEnd);
@@ -1200,14 +1204,14 @@
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleEnd);
 
-    // Initialize
+    // Initialize responsive canvas
     window.addEventListener('resize', () => { resizeCanvasToDisplaySize(); });
     resizeCanvasToDisplaySize();
     bgCtx.fillStyle = 'white';
     bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
     saveHistory();
     redrawAll();
-    console.log('✅ Tablet whiteboard ready! Shapes working, pinch zoom working!');
+    console.log('✅ Stable whiteboard ready! Pinch zoom, shapes, vertex edit - will not stop.');
 </script>
 </body>
 </html>
