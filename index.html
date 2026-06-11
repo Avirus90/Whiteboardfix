@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Pro Whiteboard · Dual Canvas + PDF + Record</title>
+  <title>Pro Whiteboard · Fixed Touch</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
-    body { background:#0b0f17; font-family:'Inter',system-ui,-apple-system,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+    * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+    body { background:#0b0f17; font-family:'Inter',system-ui,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; touch-action:manipulation; }
     :root { --accent:#3b82f6; --danger:#ef4444; --text:#e2e8f0; --border:#2d3a52; }
     
     #toolbar {
@@ -128,9 +128,6 @@
 
       let zoom = 2.0;
       let panX = 0, panY = 0;
-      let isPanning = false;
-      let panStartMouse = {x:0,y:0};
-      let panStartPan = {x:0,y:0};
 
       let strokes = [];
       let shapes = [];
@@ -164,22 +161,16 @@
       let recordedChunks = [];
       let isRecording = false;
       let audioStream = null;
-      let canvasStream = null;
 
-      // ═══════════════════════════════════
-      // TOUCH TRACKING - THE KEY FIX
-      // ═══════════════════════════════════
-      let activeTouches = new Map();  // pointerId -> {clientX, clientY, time}
-      let isMultiTouch = false;
+      // ═══════════════════════════════════════
+      // SIMPLE RELIABLE TOUCH HANDLING
+      // ═══════════════════════════════════════
+      let isPinching = false;
       let pinchStartDist = 0;
       let pinchStartZoom = 1;
       let pinchStartPan = {x:0, y:0};
-      let pinchStartCenter = {x:0, y:0};  // in canvas pixel coords
-      let lastPinchCenter = {x:0, y:0};
-      
-      // Debounce: wait 150ms after first touch before starting single-finger action
-      let pendingSingleTouch = null;
-      const MULTI_TOUCH_THRESHOLD = 200; // ms - if second finger arrives within this, it's multi-touch
+      let pinchMidX = 0, pinchMidY = 0; // in screen pixels relative to canvas
+      let lastPinchMidX = 0, lastPinchMidY = 0;
 
       function resizeCanvases() {
         const topRect = topWrapper.getBoundingClientRect();
@@ -229,70 +220,47 @@
       }
       function undo() {
         if(!undoStack.length) return;
-        redoStack.push({
-          strokes:JSON.parse(JSON.stringify(strokes)), shapes:JSON.parse(JSON.stringify(shapes)),
-          images:images.map(i=>({...i,imgElement:null})), latexItems:JSON.parse(JSON.stringify(latexItems))
-        });
-        const prev=undoStack.pop();
-        strokes=prev.strokes; shapes=prev.shapes;
+        redoStack.push({strokes:JSON.parse(JSON.stringify(strokes)), shapes:JSON.parse(JSON.stringify(shapes)), images:images.map(i=>({...i,imgElement:null})), latexItems:JSON.parse(JSON.stringify(latexItems))});
+        const prev=undoStack.pop(); strokes=prev.strokes; shapes=prev.shapes;
         const imgMap=new Map(images.map(i=>[i.id,i.imgElement]));
-        images=prev.images.map(p=>({...p,imgElement:imgMap.get(p.id)}));
-        latexItems=prev.latexItems; renderAll();
+        images=prev.images.map(p=>({...p,imgElement:imgMap.get(p.id)})); latexItems=prev.latexItems; renderAll();
       }
       function redo() {
         if(!redoStack.length) return;
-        undoStack.push({
-          strokes:JSON.parse(JSON.stringify(strokes)), shapes:JSON.parse(JSON.stringify(shapes)),
-          images:images.map(i=>({...i,imgElement:null})), latexItems:JSON.parse(JSON.stringify(latexItems))
-        });
-        const next=redoStack.pop();
-        strokes=next.strokes; shapes=next.shapes;
+        undoStack.push({strokes:JSON.parse(JSON.stringify(strokes)), shapes:JSON.parse(JSON.stringify(shapes)), images:images.map(i=>({...i,imgElement:null})), latexItems:JSON.parse(JSON.stringify(latexItems))});
+        const next=redoStack.pop(); strokes=next.strokes; shapes=next.shapes;
         const imgMap=new Map(images.map(i=>[i.id,i.imgElement]));
-        images=next.images.map(p=>({...p,imgElement:imgMap.get(p.id)}));
-        latexItems=next.latexItems; renderAll();
+        images=next.images.map(p=>({...p,imgElement:imgMap.get(p.id)})); latexItems=next.latexItems; renderAll();
       }
 
       function renderAll() { renderTop(); renderBottom(); updateViewportIndicator(); }
-
       function renderTop() {
-        topCtx.clearRect(0,0,WORLD_W,WORLD_H);
-        topCtx.fillStyle='#fff'; topCtx.fillRect(0,0,WORLD_W,WORLD_H);
+        topCtx.clearRect(0,0,WORLD_W,WORLD_H); topCtx.fillStyle='#fff'; topCtx.fillRect(0,0,WORLD_W,WORLD_H);
         if(pdfBgImage) topCtx.drawImage(pdfBgImage,0,0,WORLD_W,WORLD_H);
         drawContent(topCtx);
       }
-
       function renderBottom() {
-        bottomCtx.clearRect(0,0,WORLD_W,WORLD_H);
-        bottomCtx.fillStyle='#fff'; bottomCtx.fillRect(0,0,WORLD_W,WORLD_H);
-        bottomCtx.save();
-        bottomCtx.translate(panX,panY);
-        bottomCtx.scale(zoom,zoom);
+        bottomCtx.clearRect(0,0,WORLD_W,WORLD_H); bottomCtx.fillStyle='#fff'; bottomCtx.fillRect(0,0,WORLD_W,WORLD_H);
+        bottomCtx.save(); bottomCtx.translate(panX,panY); bottomCtx.scale(zoom,zoom);
         if(pdfBgImage){ bottomCtx.globalAlpha=0.5; bottomCtx.drawImage(pdfBgImage,0,0,WORLD_W,WORLD_H); bottomCtx.globalAlpha=1; }
-        drawContent(bottomCtx);
-        bottomCtx.restore();
+        drawContent(bottomCtx); bottomCtx.restore();
         drawGrid();
         bottomCtx.strokeStyle='#888'; bottomCtx.lineWidth=1.5; bottomCtx.strokeRect(0,0,WORLD_W,WORLD_H);
       }
-
       function drawContent(ctx) {
         for(const s of strokes) {
           ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
           if(s.type==='eraser'){ ctx.globalCompositeOperation='destination-out'; ctx.strokeStyle='rgba(0,0,0,1)'; }
           else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=s.color; }
           ctx.lineWidth=s.size;
-          if(s.points.length>=2){
-            ctx.beginPath(); ctx.moveTo(s.points[0].x,s.points[0].y);
+          if(s.points.length>=2){ ctx.beginPath(); ctx.moveTo(s.points[0].x,s.points[0].y);
             for(let i=1;i<s.points.length;i++){ const p=s.points[i-1],c=s.points[i]; ctx.quadraticCurveTo(p.x,p.y,(p.x+c.x)/2,(p.y+c.y)/2); }
-            ctx.lineTo(s.points[s.points.length-1].x,s.points[s.points.length-1].y); ctx.stroke();
-          } else if(s.points.length===1){
-            ctx.beginPath(); ctx.arc(s.points[0].x,s.points[0].y,s.size/2,0,Math.PI*2);
-            ctx.fillStyle=s.type==='eraser'?'#000':s.color; ctx.fill();
-          }
+            ctx.lineTo(s.points[s.points.length-1].x,s.points[s.points.length-1].y); ctx.stroke(); }
+          else if(s.points.length===1){ ctx.beginPath(); ctx.arc(s.points[0].x,s.points[0].y,s.size/2,0,Math.PI*2); ctx.fillStyle=s.type==='eraser'?'#000':s.color; ctx.fill(); }
           ctx.restore();
         }
         for(const sh of shapes){
-          ctx.save(); const cx=sh.x+sh.w/2,cy=sh.y+sh.h/2;
-          ctx.translate(cx,cy); ctx.rotate((sh.rotation||0)*Math.PI/180); ctx.translate(-cx,-cy);
+          ctx.save(); const cx=sh.x+sh.w/2,cy=sh.y+sh.h/2; ctx.translate(cx,cy); ctx.rotate((sh.rotation||0)*Math.PI/180); ctx.translate(-cx,-cy);
           ctx.strokeStyle=sh.color||penColor; ctx.fillStyle=sh.fill||'transparent'; ctx.lineWidth=2; ctx.beginPath();
           if(sh.type==='rect') ctx.roundRect(sh.x,sh.y,sh.w,sh.h,6);
           else if(sh.type==='circle') ctx.ellipse(cx,cy,sh.w/2,sh.h/2,0,0,Math.PI*2);
@@ -303,28 +271,24 @@
           ctx.restore();
         }
         for(const img of images){
-          ctx.save(); const cx=img.x+img.w/2,cy=img.y+img.h/2;
-          ctx.translate(cx,cy); ctx.rotate((img.rotation||0)*Math.PI/180); ctx.translate(-cx,-cy);
+          ctx.save(); const cx=img.x+img.w/2,cy=img.y+img.h/2; ctx.translate(cx,cy); ctx.rotate((img.rotation||0)*Math.PI/180); ctx.translate(-cx,-cy);
           ctx.drawImage(img.imgElement,img.x,img.y,img.w,img.h);
           if(img.selected&&editMode){ ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]); ctx.strokeRect(img.x-4,img.y-4,img.w+8,img.h+8); ctx.setLineDash([]); drawHandles(ctx,img.x-4,img.y-4,img.w+8,img.h+8); }
           ctx.restore();
         }
         for(const lt of latexItems){
-          ctx.save(); const cx=lt.x+lt.w/2,cy=lt.y+lt.h/2;
-          ctx.translate(cx,cy); ctx.rotate((lt.rotation||0)*Math.PI/180); ctx.translate(-cx,-cy);
+          ctx.save(); const cx=lt.x+lt.w/2,cy=lt.y+lt.h/2; ctx.translate(cx,cy); ctx.rotate((lt.rotation||0)*Math.PI/180); ctx.translate(-cx,-cy);
           if(lt.cachedImg) ctx.drawImage(lt.cachedImg,lt.x,lt.y,lt.w,lt.h);
           if(lt.selected&&editMode){ ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]); ctx.strokeRect(lt.x-4,lt.y-4,lt.w+8,lt.h+8); ctx.setLineDash([]); drawHandles(ctx,lt.x-4,lt.y-4,lt.w+8,lt.h+8); }
           ctx.restore();
         }
       }
-
       function drawHandles(ctx,x,y,w,h){
         const handles=[{x,y},{x:x+w,y},{x,y:y+h},{x:x+w,y:y+h},{x:x+w/2,y},{x:x+w/2,y:y+h},{x,y:y+h/2},{x:x+w,y:y+h/2},{x:x+w/2,y:y-16}];
         ctx.fillStyle='#3b82f6';
         for(const h of handles){ ctx.beginPath(); ctx.arc(h.x,h.y,5,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke(); }
         ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(x+w/2,y-16); ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.setLineDash([]); ctx.stroke();
       }
-
       function drawGrid(){
         const spacing=40; bottomCtx.strokeStyle='#e2e8f0'; bottomCtx.lineWidth=0.5; bottomCtx.beginPath();
         const startX=-panX%(spacing*zoom), startY=-panY%(spacing*zoom);
@@ -332,7 +296,6 @@
         for(let y=startY;y<=WORLD_H*zoom;y+=spacing*zoom){ bottomCtx.moveTo(0,y); bottomCtx.lineTo(WORLD_W*zoom,y); }
         bottomCtx.stroke();
       }
-
       function updateViewportIndicator(){
         const vW=WORLD_W/zoom, vH=WORLD_H/zoom, sx=displayW/WORLD_W, sy=displayH/WORLD_H;
         viewportIndicator.style.left=(-panX*sx)+'px'; viewportIndicator.style.top=(-panY*sy)+'px';
@@ -341,102 +304,107 @@
 
       function screenToWorld(sx,sy){ return {x:(sx-panX)/zoom, y:(sy-panY)/zoom}; }
       
-      function getBottomCanvasCoords(e) {
+      function getCanvasCoordsFromClient(clientX, clientY) {
         const rect = bottomCanvas.getBoundingClientRect();
         return {
-          sx: (e.clientX - rect.left) * (WORLD_W / rect.width),
-          sy: (e.clientY - rect.top) * (WORLD_H / rect.height)
+          sx: (clientX - rect.left) * (WORLD_W / rect.width),
+          sy: (clientY - rect.top) * (WORLD_H / rect.height)
         };
       }
       
-      function getBottomWorldCoords(e) {
-        const c = getBottomCanvasCoords(e);
+      function worldFromClient(clientX, clientY) {
+        const c = getCanvasCoordsFromClient(clientX, clientY);
         return screenToWorld(c.sx, c.sy);
       }
 
-      // ══════════════════════════════════════
-      // POINTER EVENTS - DEBOUNCED FOR MULTI-TOUCH
-      // ══════════════════════════════════════
-      
-      bottomCanvas.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        
-        // Store this touch
-        activeTouches.set(e.pointerId, {
-          clientX: e.clientX,
-          clientY: e.clientY,
-          time: Date.now()
-        });
-        
-        const count = activeTouches.size;
-        
-        // If this is the SECOND finger arriving
-        if (count === 2) {
-          // Cancel any pending single-touch action
-          if (pendingSingleTouch) {
-            clearTimeout(pendingSingleTouch);
-            pendingSingleTouch = null;
-          }
-          // Cancel any in-progress drawing
-          if (isDrawing) {
-            isDrawing = false;
-            currentStroke = null;
-          }
-          if (window._drawingShape) {
-            shapes.pop();
-            window._drawingShape = null;
-          }
-          isPanning = false;
+      // ═══════════════════════════════════════
+      // TOUCH EVENTS - For multi-touch (pinch/pan)
+      // ═══════════════════════════════════════
+      bottomCanvas.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+          // PINCH START - block all drawing
+          e.preventDefault();
+          isPinching = true;
+          isDrawing = false;
+          currentStroke = null;
+          if (window._drawingShape) { shapes.pop(); window._drawingShape = null; }
           
-          // Initialize pinch
-          isMultiTouch = true;
-          const touches = Array.from(activeTouches.values());
-          const dx = touches[0].clientX - touches[1].clientX;
-          const dy = touches[0].clientY - touches[1].clientY;
-          pinchStartDist = Math.hypot(dx, dy);
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          pinchStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
           pinchStartZoom = zoom;
           pinchStartPan = {x: panX, y: panY};
           
-          // Calculate center in canvas coords
-          const midX = (touches[0].clientX + touches[1].clientX) / 2;
-          const midY = (touches[0].clientY + touches[1].clientY) / 2;
-          const coords = getBottomCanvasCoords({clientX: midX, clientY: midY});
-          pinchStartCenter = {x: coords.sx, y: coords.sy};
-          lastPinchCenter = {x: coords.sx, y: coords.sy};
-          
-          renderAll();
-          return;
+          const mid = getCanvasCoordsFromClient((t1.clientX + t2.clientX)/2, (t1.clientY + t2.clientY)/2);
+          pinchMidX = mid.sx;
+          pinchMidY = mid.sy;
+          lastPinchMidX = mid.sx;
+          lastPinchMidY = mid.sy;
         }
-        
-        // If this is the FIRST finger (count === 1)
-        if (count === 1 && !isMultiTouch) {
-          // Wait a short time to see if a second finger arrives
-          pendingSingleTouch = setTimeout(() => {
-            pendingSingleTouch = null;
-            // No second finger arrived - execute single-touch action
-            executeSingleTouchAction(e);
-          }, MULTI_TOUCH_THRESHOLD);
+      }, {passive: false});
+
+      bottomCanvas.addEventListener('touchmove', function(e) {
+        if (isPinching && e.touches.length === 2) {
+          e.preventDefault();
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          
+          // Current distance
+          const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+          
+          // Current midpoint
+          const mid = getCanvasCoordsFromClient((t1.clientX + t2.clientX)/2, (t1.clientY + t2.clientY)/2);
+          
+          // PAN: move with midpoint delta
+          const dx = mid.sx - lastPinchMidX;
+          const dy = mid.sy - lastPinchMidY;
+          panX += dx;
+          panY += dy;
+          
+          // ZOOM: scale from start
+          if (pinchStartDist > 0) {
+            const scale = dist / pinchStartDist;
+            const newZoom = Math.min(8, Math.max(0.5, pinchStartZoom * scale));
+            
+            // Adjust pan to keep the initial pinch point stable
+            const worldBefore = screenToWorld(pinchMidX, pinchMidY);
+            zoom = newZoom;
+            const worldAfter = screenToWorld(pinchMidX, pinchMidY);
+            panX += (worldAfter.x - worldBefore.x) * zoom;
+            panY += (worldAfter.y - worldBefore.y) * zoom;
+          }
+          
+          lastPinchMidX = mid.sx;
+          lastPinchMidY = mid.sy;
+          clampPan();
+          renderAll();
+        }
+      }, {passive: false});
+
+      bottomCanvas.addEventListener('touchend', function(e) {
+        if (e.touches.length < 2) {
+          isPinching = false;
+          pinchStartDist = 0;
         }
       });
 
-      function executeSingleTouchAction(e) {
-        if (isMultiTouch) return; // Safety check
+      // ═══════════════════════════════════════
+      // POINTER EVENTS - For single-touch drawing & mouse
+      // ═══════════════════════════════════════
+      bottomCanvas.addEventListener('pointerdown', function(e) {
+        // Skip if pinching or if this is a touch (touch events handle multi-touch)
+        if (isPinching) return;
+        if (e.pointerType === 'touch' && e.isPrimary === false) return;
         
-        const worldCoords = getBottomWorldCoords(e);
+        e.preventDefault();
+        const world = worldFromClient(e.clientX, e.clientY);
         
         if (currentTool === 'pan' || (e.button === 1)) {
           startPan(e);
           return;
         }
         if (editMode && currentTool === 'edit') {
-          if (selectedItem) {
-            const item = getSelectedItemObject();
-            if (item) {
-              const handle = getHandleAt(e, item);
-              if (handle) { startEditDrag(e, selectedItem, handle); return; }
-            }
-          }
-          const hit = hitTest(worldCoords.x, worldCoords.y);
+          const hit = hitTest(world.x, world.y);
           if (hit) { selectItem(hit); startEditDrag(e, hit, 'move'); }
           else { deselectAll(); renderAll(); }
           return;
@@ -447,164 +415,90 @@
           currentStroke = {
             id: nextId++,
             type: currentTool === 'eraser' ? 'eraser' : 'pen',
-            points: [{x: worldCoords.x, y: worldCoords.y}],
+            points: [{x: world.x, y: world.y}],
             color: currentTool === 'eraser' ? '#000' : penColor,
             size: currentTool === 'eraser' ? 20 : penSize
           };
           strokes.push(currentStroke);
           renderAll();
         } else if (currentTool === 'strokeEraser') {
-          const hitIdx = strokes.findIndex(s => s.type !== 'eraser' && pointNearStroke(worldCoords, s, 15));
+          const hitIdx = strokes.findIndex(s => s.type !== 'eraser' && pointNearStroke(world, s, 15));
           if (hitIdx !== -1) { saveState(); strokes.splice(hitIdx, 1); renderAll(); }
         } else if (currentTool.startsWith('shape-')) {
           saveState();
           const shape = {
-            id: nextId++,
-            type: currentTool.replace('shape-', ''),
-            x: worldCoords.x, y: worldCoords.y, w: 0, h: 0,
+            id: nextId++, type: currentTool.replace('shape-', ''),
+            x: world.x, y: world.y, w: 0, h: 0,
             rotation: 0, color: penColor, fill: 'transparent', selected: false
           };
           shapes.push(shape);
           isDrawing = false;
           currentStroke = null;
-          startShapeDraw(shape, worldCoords);
+          window._drawingShape = shape;
         }
-      }
+      });
 
-      bottomCanvas.addEventListener('pointermove', (e) => {
-        // Update stored position for this touch
-        if (activeTouches.has(e.pointerId)) {
-          activeTouches.set(e.pointerId, {
-            ...activeTouches.get(e.pointerId),
-            clientX: e.clientX,
-            clientY: e.clientY
-          });
-        }
+      bottomCanvas.addEventListener('pointermove', function(e) {
+        if (isPinching) return;
+        if (e.pointerType === 'touch' && e.isPrimary === false) return;
         
-        // Multi-touch: pinch + pan
-        if (isMultiTouch && activeTouches.size >= 2) {
-          const touches = Array.from(activeTouches.values());
-          const dx = touches[0].clientX - touches[1].clientX;
-          const dy = touches[0].clientY - touches[1].clientY;
-          const dist = Math.hypot(dx, dy);
-          
-          // Calculate new center
-          const midX = (touches[0].clientX + touches[1].clientX) / 2;
-          const midY = (touches[0].clientY + touches[1].clientY) / 2;
-          const newCenter = getBottomCanvasCoords({clientX: midX, clientY: midY});
-          
-          // Pan: move with center delta
-          const panDx = newCenter.sx - lastPinchCenter.x;
-          const panDy = newCenter.sy - lastPinchCenter.y;
-          panX += panDx;
-          panY += panDy;
-          
-          // Zoom: scale relative to start
-          if (pinchStartDist > 0) {
-            const scale = dist / pinchStartDist;
-            const newZoom = Math.min(8, Math.max(0.5, pinchStartZoom * scale));
-            
-            // Adjust pan to keep pinch-start center stable
-            const worldBefore = screenToWorld(pinchStartCenter.x, pinchStartCenter.y);
-            zoom = newZoom;
-            const worldAfter = screenToWorld(pinchStartCenter.x, pinchStartCenter.y);
-            panX += (worldAfter.x - worldBefore.x) * zoom;
-            panY += (worldAfter.y - worldBefore.y) * zoom;
-          }
-          
-          lastPinchCenter = newCenter;
-          clampPan();
-          renderAll();
-          return;
-        }
-        
-        // Single touch: normal behavior
-        if (isMultiTouch) return; // Don't process single moves during multi-touch
-        
-        // Cancel pending single if finger moves significantly (optional)
-        if (pendingSingleTouch) {
-          // Could cancel, but let's keep it - user may just be slow
-        }
-        
+        e.preventDefault();
         if (isPanning) {
           panX = panStartPan.x + (e.clientX - panStartMouse.x);
           panY = panStartPan.y + (e.clientY - panStartMouse.y);
-          clampPan();
-          renderAll();
-          return;
+          clampPan(); renderAll(); return;
         }
         if (editDragMode && selectedItem) { handleEditDrag(e); return; }
         if (isDrawing && currentStroke) {
-          currentStroke.points.push(getBottomWorldCoords(e));
+          currentStroke.points.push(worldFromClient(e.clientX, e.clientY));
           renderAll();
         }
-        if (window._drawingShape) updateShapeDraw(window._drawingShape, getBottomWorldCoords(e));
-      });
-
-      window.addEventListener('pointerup', (e) => {
-        // Remove touch
-        activeTouches.delete(e.pointerId);
-        
-        // If multi-touch ended
-        if (isMultiTouch && activeTouches.size < 2) {
-          isMultiTouch = false;
-          pinchStartDist = 0;
-          
-          // If one finger remains, it becomes a regular touch
-          if (activeTouches.size === 1) {
-            // Don't auto-start drawing - user needs to lift and re-tap
-            isDrawing = false;
-            currentStroke = null;
-            isPanning = false;
-            bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair');
-          }
-          if (activeTouches.size === 0) {
-            isDrawing = false;
-            currentStroke = null;
-            isPanning = false;
-            bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair');
-          }
+        if (window._drawingShape) {
+          const world = worldFromClient(e.clientX, e.clientY);
+          const shape = window._drawingShape;
+          shape.x = Math.min(shape.x, world.x);
+          shape.y = Math.min(shape.y, world.y);
+          shape.w = Math.abs(world.x - shape.x);
+          shape.h = Math.abs(world.y - shape.y);
           renderAll();
-          return;
-        }
-        
-        // Single touch ended
-        if (!isMultiTouch && activeTouches.size === 0) {
-          // Cancel any pending single-touch action
-          if (pendingSingleTouch) {
-            clearTimeout(pendingSingleTouch);
-            pendingSingleTouch = null;
-          }
-          
-          if (isPanning) { isPanning = false; bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair'); return; }
-          if (isDrawing) { isDrawing = false; currentStroke = null; renderAll(); }
-          if (window._drawingShape) {
-            if (window._drawingShape.w < 5 || window._drawingShape.h < 5) shapes.pop();
-            window._drawingShape = null;
-            renderAll();
-          }
-          if (editDragMode) { editDragMode = null; editStart = null; editItemStart = null; editHandle = null; renderAll(); }
         }
       });
 
-      function startPan(e) { isPanning=true; panStartMouse={x:e.clientX,y:e.clientY}; panStartPan={x:panX,y:panY}; bottomCanvas.style.cursor='grabbing'; }
-      function startShapeDraw(shape,coords) { window._drawingShape=shape; shape.x=coords.x; shape.y=coords.y; }
-      function updateShapeDraw(shape,coords) { shape.x=Math.min(shape.x,coords.x); shape.y=Math.min(shape.y,coords.y); shape.w=Math.abs(coords.x-shape.x); shape.h=Math.abs(coords.y-shape.y); renderAll(); }
+      window.addEventListener('pointerup', function(e) {
+        if (isPinching) return;
+        
+        if (isPanning) { isPanning = false; bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair'); return; }
+        if (isDrawing) { isDrawing = false; currentStroke = null; renderAll(); }
+        if (window._drawingShape) {
+          if (window._drawingShape.w < 5 || window._drawingShape.h < 5) shapes.pop();
+          window._drawingShape = null;
+          renderAll();
+        }
+        if (editDragMode) { editDragMode = null; editStart = null; editItemStart = null; editHandle = null; renderAll(); }
+      });
+
+      function startPan(e) {
+        isPanning = true;
+        panStartMouse = {x: e.clientX, y: e.clientY};
+        panStartPan = {x: panX, y: panY};
+        bottomCanvas.style.cursor = 'grabbing';
+      }
 
       // Wheel zoom
-      bottomCanvas.addEventListener('wheel', (e) => {
+      bottomCanvas.addEventListener('wheel', function(e) {
         e.preventDefault();
-        if (isMultiTouch) return;
-        const rect = bottomCanvas.getBoundingClientRect();
-        const sx = (e.clientX-rect.left)*(WORLD_W/rect.width), sy = (e.clientY-rect.top)*(WORLD_H/rect.height);
-        const wb = screenToWorld(sx,sy);
-        zoom = Math.min(8, Math.max(0.5, zoom * (1 - e.deltaY*0.005)));
-        const wa = screenToWorld(sx,sy);
-        panX += (wa.x-wb.x)*zoom; panY += (wa.y-wb.y)*zoom;
-        clampPan(); renderAll();
-      }, {passive:false});
+        if (isPinching) return;
+        const c = getCanvasCoordsFromClient(e.clientX, e.clientY);
+        const wb = screenToWorld(c.sx, c.sy);
+        zoom = Math.min(8, Math.max(0.5, zoom * (1 - e.deltaY * 0.005)));
+        const wa = screenToWorld(c.sx, c.sy);
+        panX += (wa.x - wb.x) * zoom;
+        panY += (wa.y - wb.y) * zoom;
+        clampPan();
+        renderAll();
+      }, {passive: false});
 
-      // Hit test & selection
+      // Hit test
       function hitTest(wx,wy){
         for(let i=shapes.length-1;i>=0;i--){ const s=shapes[i]; if(wx>=s.x-8&&wx<=s.x+s.w+8&&wy>=s.y-8&&wy<=s.y+s.h+8) return {type:'shape',index:i}; }
         for(let i=images.length-1;i>=0;i--){ const im=images[i]; if(wx>=im.x&&wx<=im.x+im.w&&wy>=im.y&&wy<=im.y+im.h) return {type:'image',index:i}; }
@@ -621,15 +515,6 @@
         if(selectedItem.type==='latex') return latexItems[selectedItem.index];
         return null;
       }
-      function getHandleAt(e,item){
-        const c = getBottomCanvasCoords(e);
-        const world = screenToWorld(c.sx, c.sy);
-        const bbox={x:item.x-6,y:item.y-6,w:item.w+12,h:item.h+12};
-        if(Math.hypot(world.x-(bbox.x+bbox.w/2),world.y-(bbox.y-16))<12) return 'rotate';
-        const handles=[{n:'top-left',x:bbox.x,y:bbox.y},{n:'top-right',x:bbox.x+bbox.w,y:bbox.y},{n:'bottom-left',x:bbox.x,y:bbox.y+bbox.h},{n:'bottom-right',x:bbox.x+bbox.w,y:bbox.y+bbox.h},{n:'top',x:bbox.x+bbox.w/2,y:bbox.y},{n:'bottom',x:bbox.x+bbox.w/2,y:bbox.y+bbox.h},{n:'left',x:bbox.x,y:bbox.y+bbox.h/2},{n:'right',x:bbox.x+bbox.w,y:bbox.y+bbox.h/2}];
-        for(const h of handles) if(Math.hypot(world.x-h.x,world.y-h.y)<12) return h.n;
-        return null;
-      }
       function startEditDrag(e,hit,handle){
         editStart={x:e.clientX,y:e.clientY}; const item=getSelectedItemObject(); if(!item) return;
         editItemStart={x:item.x,y:item.y,w:item.w,h:item.h,rotation:item.rotation};
@@ -639,23 +524,6 @@
         if(!selectedItem||!editDragMode) return; const item=getSelectedItemObject(); if(!item) return;
         const dx=(e.clientX-editStart.x)/zoom, dy=(e.clientY-editStart.y)/zoom;
         if(editDragMode==='move'){ item.x=editItemStart.x+dx; item.y=editItemStart.y+dy; }
-        else if(editDragMode==='resize'&&editHandle){
-          const s=editItemStart; let nx=s.x,ny=s.y,nw=s.w,nh=s.h;
-          switch(editHandle){
-            case'top-left':nx=s.x+dx;ny=s.y+dy;nw=s.w-dx;nh=s.h-dy;break;
-            case'top-right':ny=s.y+dy;nw=s.w+dx;nh=s.h-dy;break;
-            case'bottom-left':nx=s.x+dx;nw=s.w-dx;nh=s.h+dy;break;
-            case'bottom-right':nw=s.w+dx;nh=s.h+dy;break;
-            case'top':ny=s.y+dy;nh=s.h-dy;break; case'bottom':nh=s.h+dy;break;
-            case'left':nx=s.x+dx;nw=s.w-dx;break; case'right':nw=s.w+dx;break;
-          }
-          item.x=nx;item.y=ny;item.w=Math.max(10,nw);item.h=Math.max(10,nh);
-        } else if(editDragMode==='rotate'){
-          const c = getBottomCanvasCoords(e);
-          const world = screenToWorld(c.sx, c.sy);
-          const cx=editItemStart.x+editItemStart.w/2, cy=editItemStart.y+editItemStart.h/2;
-          item.rotation=Math.atan2(world.y-cy,world.x-cx)*180/Math.PI;
-        }
         renderAll();
       }
 
@@ -699,11 +567,11 @@
       async function startRecording(){
         if(isRecording)return;
         try{audioStream=await navigator.mediaDevices.getUserMedia({audio:true}).catch(()=>null);}catch(e){audioStream=null;}
-        canvasStream=topCanvas.captureStream(30);
+        const canvasStream=topCanvas.captureStream(30);
         const tracks=[...canvasStream.getVideoTracks()]; if(audioStream) tracks.push(...audioStream.getAudioTracks());
         mediaRecorder=new MediaRecorder(new MediaStream(tracks),{mimeType:'video/webm'}); recordedChunks=[];
         mediaRecorder.ondataavailable=e=>{if(e.data.size>0)recordedChunks.push(e.data);};
-        mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:'video/webm'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='whiteboard-'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.webm';document.body.appendChild(a);a.click();document.body.removeChild(a);if(audioStream){audioStream.getTracks().forEach(t=>t.stop());audioStream=null;}canvasStream=null;toast('✅ Recording saved!');};
+        mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:'video/webm'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='whiteboard-'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.webm';document.body.appendChild(a);a.click();document.body.removeChild(a);if(audioStream){audioStream.getTracks().forEach(t=>t.stop());audioStream=null;};toast('✅ Recording saved!');};
         mediaRecorder.start(); isRecording=true; btnRecord.classList.add('recording'); btnRecord.textContent='⏹ Stop'; recStatus.textContent='🔴 Recording...'; recStatus.style.color='#ef4444'; toast('🔴 Recording started');
       }
       function stopRecording(){
@@ -743,7 +611,7 @@
       function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       setTool('pen');
-      toast('✒️ 2-finger pinch+pan • 1-finger draw • R to record');
+      toast('✅ Fixed! 1-finger draw • 2-finger pinch+pan');
     })();
   </script>
 </body>
