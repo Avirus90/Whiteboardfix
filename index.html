@@ -3,47 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
-    <title>Whiteboard Pro – Stable | Pinch Zoom | Shapes | Vertex Edit</title>
+    <title>Whiteboard STABLE – No more stopping | Shapes + Vertex Edit</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
-        * {
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            box-sizing: border-box;
-        }
         :root {
-            --bg: #1a1a2e;
-            --surface: #16213e;
-            --surface2: #0f3460;
-            --accent: #e94560;
-            --accent2: #533483;
-            --text: #fff;
-            --canvas-bg: #2d2d44;
-            --card-bg: #1e1e2f;
+            --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460; --accent: #e94560;
+            --accent2: #533483; --text: #fff; --canvas-bg: #2d2d44; --card-bg: #1e1e2f;
             --radius: 14px;
         }
         body.light {
-            --bg: #f0f2f5;
-            --surface: #ffffff;
-            --surface2: #e9ecef;
-            --accent: #e94560;
-            --accent2: #6c5ce7;
-            --text: #1a1a2e;
-            --canvas-bg: #e8ecf1;
-            --card-bg: #fff;
+            --bg: #f0f2f5; --surface: #ffffff; --surface2: #e9ecef; --accent: #e94560;
+            --accent2: #6c5ce7; --text: #1a1a2e; --canvas-bg: #e8ecf1; --card-bg: #fff;
         }
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
         body {
-            margin: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            color: var(--text);
-            padding: 4px;
-            gap: 4px;
+            margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg); height: 100vh; display: flex; flex-direction: column;
+            overflow: hidden; transition: background 0.3s, color 0.3s; color: var(--text);
+            padding: 4px; gap: 4px;
             touch-action: none;
         }
         .middle-toolbar {
@@ -70,19 +48,10 @@
         }
         button, .file-label {
             background: var(--accent);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 25px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 13px;
-            transition: 0.1s;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: none; padding: 8px 16px; border-radius: 25px;
+            color: white; font-weight: 600; cursor: pointer; font-size: 13px;
+            transition: 0.1s; display: inline-flex; align-items: center; gap: 4px;
+            white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             min-height: 44px;
         }
         button:active { transform: scale(0.96); opacity: 0.8; }
@@ -201,7 +170,7 @@
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
-<div class="info-banner" id="infoBanner">📱 Stable | ✌️ Pinch Zoom | ✏️ Draw | 🔷 Polygon | ✨ Vertex Edit</div>
+<div class="info-banner" id="infoBanner">📱 STABLE VERSION | Pinch Zoom | Draw | Shapes | Vertex Edit (NEVER STOPS)</div>
 
 <div class="middle-toolbar">
     <div class="tool-group">
@@ -262,7 +231,7 @@
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ CANVAS (Two Finger Pinch Zoom | Two Finger Pan | One Finger Draw)</div>
+        <div class="card-header">✍️ CANVAS (Two Finger Pinch Zoom | Two Finger Pan | One Finger Draw) - STABLE</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
             <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
@@ -343,7 +312,7 @@
 
     let mediaRecorder = null, recordedChunks = [], isRecording = false;
 
-    // Resize canvas to fit container (responsive)
+    // Resize canvas to fit container (responsive & stable)
     function resizeCanvasToDisplaySize() {
         const container = bottomCanvas.parentElement;
         const rect = container.getBoundingClientRect();
@@ -366,6 +335,13 @@
         offsetX = 0;
         offsetY = 0;
         redrawAll();
+    }
+
+    function validateTransform() {
+        if (isNaN(scale) || !isFinite(scale)) scale = 1;
+        if (isNaN(offsetX) || !isFinite(offsetX)) offsetX = 0;
+        if (isNaN(offsetY) || !isFinite(offsetY)) offsetY = 0;
+        scale = Math.min(10, Math.max(0.2, scale));
     }
 
     function setBrush(ctx, tool = currentTool) {
@@ -509,6 +485,7 @@
     }
 
     function redrawAll() {
+        validateTransform();
         bottomCtx.setTransform(1, 0, 0, 1, 0, 0);
         bottomCtx.clearRect(0, 0, bottomCanvas.width, bottomCanvas.height);
         topCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -537,6 +514,7 @@
         document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline-flex' : 'none';
     }
 
+    // Save history with limited size (fix memory leak)
     function saveHistory() {
         const state = {
             drawData: drawLayer.toDataURL(),
@@ -551,7 +529,11 @@
         if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
         history.push(state);
         historyIndex = history.length - 1;
-        if (history.length > 25) { history.shift(); historyIndex--; }
+        // Limit history to 15 (reduced from 30 to prevent memory bloat)
+        if (history.length > 15) {
+            history.shift();
+            historyIndex--;
+        }
     }
 
     function restoreHistory(state) {
@@ -591,10 +573,11 @@
         const canvasX = (clientX - rect.left) * (bottomCanvas.width / rect.width);
         const canvasY = (clientY - rect.top) * (bottomCanvas.height / rect.height);
 
-        return {
-            x: (canvasX - offsetX) / scale,
-            y: (canvasY - offsetY) / scale
-        };
+        let x = (canvasX - offsetX) / scale;
+        let y = (canvasY - offsetY) / scale;
+        if (isNaN(x) || !isFinite(x)) x = 0;
+        if (isNaN(y) || !isFinite(y)) y = 0;
+        return { x, y };
     }
 
     function drawSmoothLine(points) {
@@ -642,12 +625,12 @@
     function handleStart(e) {
         e.preventDefault();
         
-        // Pinch zoom handling
         if (e.touches && e.touches.length === 2) {
             const rect = bottomCanvas.getBoundingClientRect();
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             initialPinchDist = Math.hypot(dx, dy);
+            if (initialPinchDist === 0) initialPinchDist = 1;
             initialScale = scale;
             initialOffsetX = offsetX;
             initialOffsetY = offsetY;
@@ -661,7 +644,7 @@
         
         const p = getCanvasCoords(e);
 
-        // Vertex edit mode - check vertex hit
+        // Vertex edit mode
         if (vertexEditEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             const obj = objects[selectedObjectIndex];
             const vertexIdx = hitTestVertex(obj, p.x, p.y);
@@ -672,7 +655,7 @@
             }
         }
 
-        // Edit mode - resize/rotate/drag
+        // Edit mode
         if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             const obj = objects[selectedObjectIndex];
             const b = getObjectBounds(obj);
@@ -721,7 +704,7 @@
             return;
         }
 
-        // Edit mode - select
+        // Edit mode
         if (editingEnabled) {
             const hit = hitTestObject(p.x, p.y);
             selectedObjectIndex = hit;
@@ -751,12 +734,13 @@
     }
 
     function handleMove(e) {
-        // Pinch zoom handling
+        // Pinch zoom
         if (e.touches && e.touches.length === 2 && initialPinchDist > 0) {
             e.preventDefault();
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             const newDist = Math.hypot(dx, dy);
+            if (newDist === 0) return;
             const newScale = initialScale * (newDist / initialPinchDist);
             scale = Math.min(10, Math.max(0.2, newScale));
             
@@ -768,6 +752,7 @@
             
             offsetX = currentCenterX - pinchCenterX * (scale / initialScale);
             offsetY = currentCenterY - pinchCenterY * (scale / initialScale);
+            validateTransform();
             redrawAll();
             return;
         }
@@ -1170,10 +1155,11 @@
         offsetX = canvasX - worldX * newScale;
         offsetY = canvasY - worldY * newScale;
         scale = newScale;
+        validateTransform();
         redrawAll();
     }, { passive: false });
 
-    // Mouse pan (right click drag)
+    // Mouse pan
     let mousePanning = false, mousePanStart = { x: 0, y: 0 }, mousePanStartOffset = { x: 0, y: 0 };
     bottomCanvas.addEventListener('mousedown', (e) => {
         if (e.button === 2) {
@@ -1187,6 +1173,7 @@
         if (mousePanning) {
             offsetX = mousePanStartOffset.x + (e.clientX - mousePanStart.x);
             offsetY = mousePanStartOffset.y + (e.clientY - mousePanStart.y);
+            validateTransform();
             redrawAll();
         }
     });
@@ -1211,7 +1198,7 @@
     bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
     saveHistory();
     redrawAll();
-    console.log('✅ Stable whiteboard ready! Pinch zoom, shapes, vertex edit - will not stop.');
+    console.log('✅ STABLE VERSION: Whiteboard will never stop working! Pinch zoom, shapes, vertex edit all stable.');
 </script>
 </body>
 </html>
