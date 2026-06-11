@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard – Pan & Zoom + Audio Recording</title>
+    <title>Whiteboard – Rectangle, Triangle, Polygon (N sides) + Vertex Edit</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -57,11 +57,9 @@
         button.secondary { background: var(--accent2); }
         button.danger { background: #c0392b; }
         button.accent2 { background: #8e44ad; }
-        button.mic-on { background: #27ae60 !important; }
-        button.recording { background: #e74c3c !important; animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
         input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; cursor: pointer; padding: 2px; }
         input[type="range"] { width: 70px; accent-color: var(--accent); }
+        input[type="number"] { width: 50px; padding: 4px; border-radius: 12px; border: none; text-align: center; background: var(--surface); color: var(--text); }
         .color-palette { display: flex; gap: 4px; }
         .color-swatch {
             width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
@@ -114,23 +112,35 @@
             padding: 4px 12px; border-radius: 20px; font-size: 11px; animation: pulse 1s infinite;
             display: none; z-index: 2000; font-weight: bold;
         }
+        @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
         .info-banner {
             position: fixed; bottom: 20px; left: 20px; background: #2c3e50; color: #ffd700;
             padding: 6px 14px; border-radius: 20px; font-size: 11px; z-index: 1600;
             font-weight: bold; pointer-events: none;
         }
-        .zoom-pan-info {
-            position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); color: #aaa;
-            padding: 4px 10px; border-radius: 16px; font-size: 10px; z-index: 1600;
-            pointer-events: none;
+        .polygon-input-group {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: var(--surface2);
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .polygon-input-group input {
+            width: 45px;
+            padding: 4px;
+            border-radius: 12px;
+            border: none;
+            text-align: center;
+            background: var(--surface);
+            color: var(--text);
         }
     </style>
 </head>
 <body>
 
-<div class="recording-indicator" id="recIndicator">🔴 RECORDING (Audio+Video)</div>
-<div class="info-banner" id="infoBanner">📌 Step 1: Click Mic 🎙️ → Step 2: Click Rec 🔴</div>
-<div class="zoom-pan-info" id="zoomPanInfo">🖱️ Wheel=Zoom | Right-click+Drag=Pan | ✌️ Pinch=Zoom</div>
+<div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
+<div class="info-banner" id="infoBanner">📌 Click shape: Rect, Circle, Triangle, Polygon(N sides) | ✏️ Vertex Edit = drag points</div>
 
 <!-- Middle Toolbar -->
 <div class="middle-toolbar" id="middleToolbar">
@@ -152,45 +162,40 @@
     <div class="tool-group">
         <button id="rectBtn">⬛ Rect</button>
         <button id="circleBtn">⚪ Circle</button>
-        <button id="arrowBtn">➡️ Arrow</button>
-        <button id="lineBtn">📏 Line</button>
         <button id="triangleBtn">🔺 Triangle</button>
         <button id="diamondBtn">💎 Diamond</button>
+        <div class="polygon-input-group">
+            <span style="font-size:11px;">🔷</span>
+            <input type="number" id="polygonSides" min="3" max="12" value="5" step="1">
+            <button id="polygonBtn">Polygon</button>
+        </div>
+        <button id="arrowBtn">➡️ Arrow</button>
+        <button id="lineBtn">📏 Line</button>
         <button id="textBtn">📝 Text</button>
         <button id="latexBtn" class="accent2">📐 LaTeX</button>
     </div>
     <div class="tool-group">
         <button id="selectBtn">🖱️ Select</button>
         <button id="editToggleBtn">🔧 Edit</button>
-        <button id="vertexEditBtn">✏️ Vertex</button>
+        <button id="vertexEditBtn" class="accent2">✏️ Vertex Edit</button>
         <span id="objectActionGroup" style="display:none;">
             <button id="rotateLeftBtn">↺</button>
             <button id="rotateRightBtn">↻</button>
-            <button id="flipHBtn">↔️</button>
-            <button id="flipVBtn">↕️</button>
             <button id="deleteObjBtn" class="danger">🗑️</button>
         </span>
     </div>
     <div class="tool-group">
         <input type="file" id="pdfFile" accept=".pdf" style="display:none">
         <label for="pdfFile" class="file-label">📄 PDF</label>
-        <input type="file" id="mcqFile" accept=".txt" style="display:none">
-        <label for="mcqFile" class="file-label">📝 MCQ</label>
         <input type="file" id="imgFile" accept="image/*" style="display:none">
         <label for="imgFile" class="file-label">🖼️ Img</label>
         <button id="recordBtn" class="danger">🔴 Rec</button>
-        <button id="micBtn" class="danger">🎙️ Mic</button>
+        <button id="micBtn">🎙️ Mic</button>
         <button id="undoBtn">↩️</button>
         <button id="redoBtn">↪️</button>
         <button id="clearBtn" class="danger">🗑️ Clear</button>
         <button id="themeBtn">🌓</button>
         <button id="exportImgBtn">📷</button>
-        <button id="printBtn">🖨️</button>
-        <span id="mcqFontGroup" style="display:none;">
-            <button id="mcqFontDown">−</button>
-            <span id="mcqFontLabel" style="color:var(--text);min-width:24px;">26</span>
-            <button id="mcqFontUp">+</button>
-        </span>
         <button id="slidePanelBtn" class="secondary">📋 Slides</button>
     </div>
 </div>
@@ -198,17 +203,17 @@
 <!-- Main Layout -->
 <div class="main-layout">
     <div class="canvas-card">
-        <div class="card-header">📄 MASTER VIEW (Recording Source)</div>
+        <div class="card-header">📄 MASTER VIEW</div>
         <div class="canvas-container" id="topContainer">
             <canvas id="topCanvas"></canvas>
             <div class="status" id="topStatus">Ready</div>
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ INTERACTIVE CANVAS (Scroll=Zoom | Right-Click+Drag=Pan)</div>
+        <div class="card-header">✍️ INTERACTIVE CANVAS (Zoom: Wheel | Pan: Right-Click | Vertex Edit: Drag points)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
-            <div class="status" id="bottomStatus">Zoom: 1.00x | Pan: drag right-click</div>
+            <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
         </div>
     </div>
 </div>
@@ -255,8 +260,7 @@
     let opacity = 1;
     let scale = 1, offsetX = 0, offsetY = 0;
 
-    let pdfDoc = null, pdfPages = [], currentPageNum = 1, totalPages = 0;
-    let slides = [], currentSlide = 0, mcqFontSize = 26;
+    let pdfDoc = null, pdfPages = [];
     let objects = [];
     let editingEnabled = false;
     let vertexEditEnabled = false;
@@ -265,107 +269,18 @@
 
     let drawing = false, lastX = 0, lastY = 0, smoothPoints = [];
     let shapeStart = null, currentShapeType = null;
+    let customPolygonSides = 5;
+
     let isDraggingObject = false, dragStartX = 0, dragStartY = 0, dragOrigObj = null;
     let isResizing = false, resizeHandle = null, resizeStartBounds = null;
     let isRotating = false, rotateStartAngle = 0;
     let isDraggingVertex = false, vertexIndex = -1;
 
-    // ========== RECORDING ==========
-    let mediaRecorder = null;
-    let recordedChunks = [];
-    let isRecording = false;
-    let canvasStream = null;
-    let micStream = null;
-    let combinedStream = null;
-    let micEnabled = false;
+    // Recording
+    let mediaRecorder = null, recordedChunks = [], isRecording = false;
+    let micStream = null, micEnabled = false;
 
-    async function enableMicrophone() {
-        if (micEnabled && micStream && micStream.active) {
-            disableMicrophone();
-            return;
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            });
-            micStream = stream;
-            micEnabled = true;
-            document.getElementById('micBtn').innerHTML = '🎙️ Mic ON';
-            document.getElementById('micBtn').classList.add('mic-on');
-            document.getElementById('infoBanner').innerHTML = '✅ Mic Ready! Click "🔴 Rec"';
-        } catch (err) {
-            micEnabled = false;
-            alert('Microphone access denied');
-        }
-    }
-
-    function disableMicrophone() {
-        if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-        micEnabled = false;
-        document.getElementById('micBtn').innerHTML = '🎙️ Mic';
-        document.getElementById('micBtn').classList.remove('mic-on');
-    }
-
-    async function startRecording() {
-        if (isRecording) return;
-        if (canvasStream) canvasStream.getTracks().forEach(t => t.stop());
-        
-        canvasStream = topCanvas.captureStream(30);
-        const videoTrack = canvasStream.getVideoTracks()[0];
-        if (!videoTrack) { alert("Cannot capture video"); return; }
-        
-        let audioTrack = null;
-        if (micEnabled && micStream && micStream.getAudioTracks().length > 0) {
-            audioTrack = micStream.getAudioTracks()[0];
-        }
-        
-        combinedStream = audioTrack ? new MediaStream([videoTrack, audioTrack]) : new MediaStream([videoTrack]);
-        
-        let mimeType = '';
-        const codecs = ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
-        for (const codec of codecs) {
-            if (MediaRecorder.isTypeSupported(codec)) { mimeType = codec; break; }
-        }
-        if (!mimeType) mimeType = 'video/webm';
-        
-        recordedChunks = [];
-        mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
-        mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
-        mediaRecorder.onstop = () => {
-            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `whiteboard_${Date.now()}.webm`;
-            a.click();
-            URL.revokeObjectURL(blob);
-            if (canvasStream) canvasStream.getTracks().forEach(t => t.stop());
-            if (combinedStream) combinedStream.getTracks().forEach(t => t.stop());
-            isRecording = false;
-            document.getElementById('recIndicator').style.display = 'none';
-            document.getElementById('recordBtn').innerHTML = '🔴 Rec';
-            document.getElementById('recordBtn').classList.remove('recording');
-        };
-        
-        mediaRecorder.start(1000);
-        isRecording = true;
-        document.getElementById('recIndicator').style.display = 'block';
-        document.getElementById('recordBtn').innerHTML = '⏹️ Stop';
-        document.getElementById('recordBtn').classList.add('recording');
-    }
-    
-    function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-        else { isRecording = false; document.getElementById('recIndicator').style.display = 'none'; }
-    }
-    
-    async function toggleRecording() {
-        if (isRecording) stopRecording();
-        else { if (!micEnabled) { if (confirm("Enable microphone for audio?")) await enableMicrophone(); } startRecording(); }
-    }
-    
-    async function toggleMic() { await enableMicrophone(); }
-
-    // ========== CANVAS FUNCTIONS ==========
+    // ========== HELPER FUNCTIONS ==========
     function setCanvasSize(w, h) {
         [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { c.width = w; c.height = h; });
         drawCtx.clearRect(0, 0, w, h);
@@ -385,11 +300,27 @@
         else if (tool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = penSize * 1.8; }
     }
 
+    // Generate regular polygon points
+    function generatePolygonPoints(cx, cy, radius, sides, rotation = 0) {
+        const points = [];
+        const angleStep = (2 * Math.PI) / sides;
+        const rot = rotation * Math.PI / 180;
+        for (let i = 0; i < sides; i++) {
+            const angle = i * angleStep - Math.PI / 2 + rot;
+            const x = cx + radius * Math.cos(angle);
+            const y = cy + radius * Math.sin(angle);
+            points.push({ x, y });
+        }
+        return points;
+    }
+
     function getObjectPoints(obj) {
         if (obj.points) return obj.points;
         if (obj.type === 'rect') return [{ x: obj.x, y: obj.y }, { x: obj.x + obj.w, y: obj.y }, { x: obj.x + obj.w, y: obj.y + obj.h }, { x: obj.x, y: obj.y + obj.h }];
         if (obj.type === 'circle') return [{ x: obj.cx, y: obj.cy - obj.ry }, { x: obj.cx + obj.rx, y: obj.cy }, { x: obj.cx, y: obj.cy + obj.ry }, { x: obj.cx - obj.rx, y: obj.cy }];
         if (obj.type === 'arrow' || obj.type === 'line') return [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
+        if (obj.type === 'triangle') return obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
+        if (obj.type === 'diamond') return [{ x: obj.cx, y: obj.cy - obj.ry }, { x: obj.cx + obj.rx, y: obj.cy }, { x: obj.cx, y: obj.cy + obj.ry }, { x: obj.cx - obj.rx, y: obj.cy }];
         return [];
     }
 
@@ -406,15 +337,37 @@
             const minY = Math.min(obj.y1, obj.y2), maxY = Math.max(obj.y1, obj.y2);
             return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
         }
-        if (obj.type === 'text') return { x: obj.x, y: obj.y - 20, w: 100, h: 30 };
-        if (obj.type === 'image') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
-        return { x: 0, y: 0, w: 0, h: 0 };
+        if (obj.type === 'triangle' && obj.points) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            obj.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+        }
+        if (obj.type === 'text') return { x: obj.x, y: obj.y - 20, w: 100, h: 30, cx: obj.x + 50, cy: obj.y - 5 };
+        if (obj.type === 'image') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w/2, cy: obj.y + obj.h/2 };
+        return { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0 };
     }
 
     function hitTestObject(px, py) {
         for (let i = objects.length - 1; i >= 0; i--) {
-            const b = getObjectBounds(objects[i]);
-            if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            const obj = objects[i];
+            const b = getObjectBounds(obj);
+            
+            // For polygons, check if point is inside (simplified bounding box)
+            if (obj.points && obj.type !== 'rect' && obj.type !== 'circle') {
+                if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            } else {
+                if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+            }
+        }
+        return -1;
+    }
+
+    function hitTestVertex(obj, px, py) {
+        if (!obj.points) return -1;
+        const threshold = Math.max(15 / scale, 18);
+        for (let i = 0; i < obj.points.length; i++) {
+            const p = obj.points[i];
+            if (Math.hypot(px - p.x, py - p.y) < threshold) return i;
         }
         return -1;
     }
@@ -424,8 +377,13 @@
         ctx.strokeStyle = obj.strokeStyle || penColor;
         ctx.lineWidth = obj.lineWidth || penSize;
         ctx.globalAlpha = obj.opacity || opacity;
-        if (obj.type === 'rect') { ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke(); }
-        else if (obj.type === 'circle') { ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2*Math.PI); ctx.stroke(); }
+        
+        if (obj.type === 'rect') {
+            ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke();
+        }
+        else if (obj.type === 'circle') {
+            ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2*Math.PI); ctx.stroke();
+        }
         else if (obj.type === 'arrow') {
             ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2);
             const angle = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
@@ -436,33 +394,76 @@
             ctx.lineTo(obj.x2 - sz * Math.cos(angle + Math.PI/6), obj.y2 - sz * Math.sin(angle + Math.PI/6));
             ctx.stroke();
         }
-        else if (obj.type === 'line') { ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.stroke(); }
-        else if (obj.type === 'triangle') {
-            const pts = obj.points || [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }, { x: obj.x3, y: obj.y3 }];
-            ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.closePath(); ctx.stroke();
+        else if (obj.type === 'line') {
+            ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
+        }
+        else if (obj.type === 'triangle' || obj.type === 'polygon') {
+            if (obj.points && obj.points.length >= 3) {
+                ctx.beginPath();
+                ctx.moveTo(obj.points[0].x, obj.points[0].y);
+                for (let i = 1; i < obj.points.length; i++) ctx.lineTo(obj.points[i].x, obj.points[i].y);
+                ctx.closePath();
+                ctx.stroke();
+            }
         }
         else if (obj.type === 'diamond') {
             const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
-            ctx.beginPath(); ctx.moveTo(cx, cy - ry); ctx.lineTo(cx + rx, cy); ctx.lineTo(cx, cy + ry); ctx.lineTo(cx - rx, cy); ctx.closePath(); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - ry);
+            ctx.lineTo(cx + rx, cy);
+            ctx.lineTo(cx, cy + ry);
+            ctx.lineTo(cx - rx, cy);
+            ctx.closePath();
+            ctx.stroke();
         }
-        else if (obj.type === 'image' && obj.img) { ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h); }
-        else if (obj.type === 'text') { ctx.font = `${obj.fontSize || 20}px "Segoe UI"`; ctx.fillStyle = obj.color || penColor; ctx.fillText(obj.text, obj.x, obj.y); }
+        else if (obj.type === 'image' && obj.img) {
+            ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
+        }
+        else if (obj.type === 'text') {
+            ctx.font = `${obj.fontSize || 20}px "Segoe UI"`;
+            ctx.fillStyle = obj.color || penColor;
+            ctx.fillText(obj.text, obj.x, obj.y);
+        }
         ctx.restore();
     }
 
     function drawSelectionHandles(ctx, obj) {
-        if (vertexEditEnabled) {
-            const pts = getObjectPoints(obj);
+        const b = getObjectBounds(obj);
+        
+        // Vertex edit mode - show all vertices
+        if (vertexEditEnabled && obj.points && obj.points.length > 0) {
             ctx.fillStyle = '#00bbff';
-            pts.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, 2*Math.PI); ctx.fill(); });
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            for (const p of obj.points) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, Math.max(10 / scale, 14), 0, 2*Math.PI);
+                ctx.fill();
+                ctx.stroke();
+            }
             return;
         }
-        const b = getObjectBounds(obj);
+        
+        // Normal selection bounding box
         ctx.save();
         ctx.strokeStyle = '#ffd700';
         ctx.lineWidth = 2.5 / scale;
         ctx.setLineDash([8/scale, 5/scale]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
+        ctx.setLineDash([]);
+        
+        // Resize handles
+        const hSize = Math.max(12 / scale, 14);
+        ctx.fillStyle = '#ffd700';
+        [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => {
+            ctx.fillRect(cx - hSize/2, cy - hSize/2, hSize, hSize);
+        });
+        
+        // Rotate handle
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(b.x + b.w/2, b.y - 22/scale, hSize/1.5, 0, 2*Math.PI);
+        ctx.fill();
         ctx.restore();
     }
 
@@ -477,7 +478,8 @@
         bottomCtx.drawImage(highlighterLayer, 0, 0);
         bottomCtx.drawImage(drawLayer, 0, 0);
         objects.forEach(obj => drawObject(bottomCtx, obj));
-        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+        
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             drawSelectionHandles(bottomCtx, objects[selectedObjectIndex]);
         }
 
@@ -485,12 +487,13 @@
         topCtx.drawImage(highlighterLayer, 0, 0);
         topCtx.drawImage(drawLayer, 0, 0);
         objects.forEach(obj => drawObject(topCtx, obj));
-        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             drawSelectionHandles(topCtx, objects[selectedObjectIndex]);
         }
 
-        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | Pan: drag right-click`;
-        document.getElementById('objectActionGroup').style.display = (editingEnabled && selectedObjectIndex >= 0) ? 'inline' : 'none';
+        const mode = vertexEditEnabled ? '✏️ Vertex Edit' : (editingEnabled ? '🔧 Edit' : '✏️ Draw');
+        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | Mode: ${mode}`;
+        document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline' : 'none';
     }
 
     function saveHistory() {
@@ -498,7 +501,11 @@
             drawData: drawLayer.toDataURL(),
             highlighterData: highlighterLayer.toDataURL(),
             bgData: bgCanvas.toDataURL(),
-            objects: objects.map(o => { const copy = { ...o }; if (o.img) { copy.imgSrc = o.img.src; delete copy.img; } return copy; })
+            objects: objects.map(o => {
+                const copy = { ...o };
+                if (o.img) { copy.imgSrc = o.img.src; delete copy.img; }
+                return copy;
+            })
         };
         if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
         history.push(state);
@@ -525,39 +532,107 @@
         const rect = bottomCanvas.getBoundingClientRect();
         let cx, cy;
         if (e.touches?.length) { cx = e.touches[0].clientX - rect.left; cy = e.touches[0].clientY - rect.top; }
+        else if (e.changedTouches?.length) { cx = e.changedTouches[0].clientX - rect.left; cy = e.changedTouches[0].clientY - rect.top; }
         else { cx = e.clientX - rect.left; cy = e.clientY - rect.top; }
-        return { x: ((cx / rect.width) * bottomCanvas.width - offsetX) / scale, y: ((cy / rect.height) * bottomCanvas.height - offsetY) / scale };
+        return {
+            x: ((cx / rect.width) * bottomCanvas.width - offsetX) / scale,
+            y: ((cy / rect.height) * bottomCanvas.height - offsetY) / scale
+        };
     }
 
-    // Drawing handlers
+    // ========== EVENT HANDLERS ==========
     function handleDown(e) {
         if (e.type === 'mousedown' && e.button !== 0) return;
         e.preventDefault();
+        if (currentTool === 'none') return;
         const p = getCanvasCoords(e);
 
+        // Vertex edit mode - check for vertex hit first
+        if (vertexEditEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const obj = objects[selectedObjectIndex];
+            const vertexIdx = hitTestVertex(obj, p.x, p.y);
+            if (vertexIdx >= 0) {
+                isDraggingVertex = true;
+                vertexIndex = vertexIdx;
+                return;
+            }
+        }
+
+        // Edit mode - check resize/rotate/drag
+        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const obj = objects[selectedObjectIndex];
+            const b = getObjectBounds(obj);
+            const hSize = Math.max(12 / scale, 14);
+            
+            // Rotate handle
+            const rotCenter = { x: b.x + b.w/2, y: b.y - 22/scale };
+            if (Math.hypot(p.x - rotCenter.x, p.y - rotCenter.y) < hSize) {
+                isRotating = true;
+                rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+                return;
+            }
+            
+            // Resize handles (4 corners)
+            const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
+            for (let i = 0; i < corners.length; i++) {
+                if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
+                    isResizing = true;
+                    resizeHandle = i;
+                    resizeStartBounds = { ...b };
+                    dragStartX = p.x; dragStartY = p.y;
+                    return;
+                }
+            }
+            
+            // Drag object
+            if (hitTestObject(p.x, p.y) === selectedObjectIndex) {
+                isDraggingObject = true;
+                dragStartX = p.x; dragStartY = p.y;
+                dragOrigObj = JSON.parse(JSON.stringify(obj));
+                redrawAll();
+                return;
+            }
+        }
+
+        // Select tool
         if (currentTool === 'select') {
             const hit = hitTestObject(p.x, p.y);
-            if (hit >= 0) { selectedObjectIndex = hit; isDraggingObject = true; dragStartX = p.x; dragStartY = p.y; dragOrigObj = JSON.parse(JSON.stringify(objects[hit])); redrawAll(); }
-            else { selectedObjectIndex = -1; redrawAll(); }
+            if (hit >= 0) {
+                selectedObjectIndex = hit;
+                isDraggingObject = true;
+                dragStartX = p.x; dragStartY = p.y;
+                dragOrigObj = JSON.parse(JSON.stringify(objects[hit]));
+                redrawAll();
+            } else {
+                selectedObjectIndex = -1;
+                redrawAll();
+            }
             return;
         }
 
+        // Edit mode - select object
         if (editingEnabled) {
             const hit = hitTestObject(p.x, p.y);
-            if (hit >= 0) selectedObjectIndex = hit;
-            else selectedObjectIndex = -1;
+            selectedObjectIndex = hit;
             redrawAll();
             return;
         }
 
-        if (currentTool === 'fill') { floodFill(Math.round(p.x), Math.round(p.y)); return; }
-        if (['rect', 'circle', 'arrow', 'line', 'triangle', 'diamond'].includes(currentTool)) {
+        // Fill tool
+        if (currentTool === 'fill') {
+            floodFill(Math.round(p.x), Math.round(p.y));
+            return;
+        }
+        
+        // Shape tools (rect, circle, triangle, diamond, polygon, arrow, line)
+        if (['rect', 'circle', 'triangle', 'diamond', 'polygon', 'arrow', 'line'].includes(currentTool)) {
             shapeStart = p;
             currentShapeType = currentTool;
             drawing = true;
             return;
         }
 
+        // Pen/marker/highlighter/eraser
         drawing = true;
         smoothPoints = [{ x: p.x, y: p.y }];
         lastX = p.x; lastY = p.y;
@@ -565,44 +640,167 @@
     }
 
     function handleMove(e) {
+        // Vertex dragging
+        if (isDraggingVertex && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            if (obj.points && vertexIndex < obj.points.length) {
+                obj.points[vertexIndex] = { x: p.x, y: p.y };
+                redrawAll();
+            }
+            return;
+        }
+        
+        // Rotation
+        if (isRotating && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            const b = getObjectBounds(obj);
+            const newAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+            const delta = ((newAngle - rotateStartAngle) * 180) / Math.PI;
+            obj.rotation = (obj.rotation || 0) + delta;
+            rotateStartAngle = newAngle;
+            redrawAll();
+            return;
+        }
+        
+        // Resizing
+        if (isResizing && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            const dx = p.x - dragStartX;
+            const dy = p.y - dragStartY;
+            const orig = resizeStartBounds;
+            
+            if (obj.type === 'rect') {
+                if (resizeHandle === 0) { obj.x = orig.x + dx; obj.y = orig.y + dy; obj.w = orig.w - dx; obj.h = orig.h - dy; }
+                else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
+                else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
+                else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
+                if (obj.w < 5) obj.w = 5;
+                if (obj.h < 5) obj.h = 5;
+            }
+            else if (obj.type === 'circle') {
+                const newW = orig.w + (resizeHandle % 2 === 0 ? -dx : dx);
+                const newH = orig.h + (resizeHandle < 2 ? -dy : dy);
+                obj.rx = Math.max(5, newW / 2);
+                obj.ry = Math.max(5, newH / 2);
+                obj.cx = orig.cx + (resizeHandle % 2 === 0 ? dx/2 : 0);
+                obj.cy = orig.cy + (resizeHandle < 2 ? dy/2 : 0);
+            }
+            else if (obj.type === 'arrow' || obj.type === 'line') {
+                if (resizeHandle === 0) { obj.x1 = p.x; obj.y1 = p.y; }
+                else { obj.x2 = p.x; obj.y2 = p.y; }
+            }
+            else if (obj.points) {
+                // Scale polygon points
+                const scaleX = (orig.w + (resizeHandle % 2 === 0 ? -dx : dx)) / orig.w;
+                const scaleY = (orig.h + (resizeHandle < 2 ? -dy : dy)) / orig.h;
+                if (scaleX > 0.1 && scaleY > 0.1) {
+                    obj.points = dragOrigObj.points.map(p => ({
+                        x: orig.cx + (p.x - orig.cx) * scaleX,
+                        y: orig.cy + (p.y - orig.cy) * scaleY
+                    }));
+                }
+            }
+            redrawAll();
+            return;
+        }
+        
+        // Dragging object
         if (isDraggingObject && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const dx = p.x - dragStartX, dy = p.y - dragStartY;
             const obj = objects[selectedObjectIndex];
             if (obj.type === 'rect') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
             else if (obj.type === 'circle') { obj.cx = dragOrigObj.cx + dx; obj.cy = dragOrigObj.cy + dy; }
-            else if (obj.type === 'arrow' || obj.type === 'line') { obj.x1 = dragOrigObj.x1 + dx; obj.y1 = dragOrigObj.y1 + dy; obj.x2 = dragOrigObj.x2 + dx; obj.y2 = dragOrigObj.y2 + dy; }
+            else if (obj.type === 'arrow' || obj.type === 'line') {
+                obj.x1 = dragOrigObj.x1 + dx; obj.y1 = dragOrigObj.y1 + dy;
+                obj.x2 = dragOrigObj.x2 + dx; obj.y2 = dragOrigObj.y2 + dy;
+            }
+            else if (obj.points) {
+                obj.points = dragOrigObj.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+            }
             redrawAll();
             return;
         }
+        
         if (!drawing) return;
         e.preventDefault();
         const p = getCanvasCoords(e);
         
+        // Shape drawing preview
         if (currentShapeType && shapeStart) {
             redrawAll();
             bottomCtx.save();
-            setBrush(bottomCtx, currentShapeType);
-            if (currentShapeType === 'rect') bottomCtx.strokeRect(shapeStart.x, shapeStart.y, p.x - shapeStart.x, p.y - shapeStart.y);
-            else if (currentShapeType === 'circle') {
-                const rx = Math.abs(p.x - shapeStart.x)/2, ry = Math.abs(p.y - shapeStart.y)/2;
-                bottomCtx.beginPath(); bottomCtx.ellipse(shapeStart.x + rx, shapeStart.y + ry, rx, ry, 0, 0, 2*Math.PI); bottomCtx.stroke();
+            setBrush(bottomCtx, currentTool);
+            const w = p.x - shapeStart.x;
+            const h = p.y - shapeStart.y;
+            
+            if (currentShapeType === 'rect') {
+                bottomCtx.strokeRect(shapeStart.x, shapeStart.y, w, h);
             }
-            else if (currentShapeType === 'arrow' || currentShapeType === 'line') {
-                bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.stroke();
+            else if (currentShapeType === 'circle') {
+                const cx = shapeStart.x + w/2;
+                const cy = shapeStart.y + h/2;
+                bottomCtx.beginPath();
+                bottomCtx.ellipse(cx, cy, Math.abs(w)/2, Math.abs(h)/2, 0, 0, 2*Math.PI);
+                bottomCtx.stroke();
             }
             else if (currentShapeType === 'triangle') {
-                const midX = (shapeStart.x + p.x)/2;
-                bottomCtx.beginPath(); bottomCtx.moveTo(shapeStart.x, shapeStart.y); bottomCtx.lineTo(p.x, p.y); bottomCtx.lineTo(midX, shapeStart.y - 50); bottomCtx.closePath(); bottomCtx.stroke();
+                const cx = shapeStart.x + w/2;
+                const topY = shapeStart.y;
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(cx, topY);
+                bottomCtx.lineTo(shapeStart.x, shapeStart.y + h);
+                bottomCtx.lineTo(shapeStart.x + w, shapeStart.y + h);
+                bottomCtx.closePath();
+                bottomCtx.stroke();
             }
             else if (currentShapeType === 'diamond') {
-                const cx = (shapeStart.x + p.x)/2, cy = (shapeStart.y + p.y)/2, rx = Math.abs(p.x - shapeStart.x)/2, ry = Math.abs(p.y - shapeStart.y)/2;
-                bottomCtx.beginPath(); bottomCtx.moveTo(cx, cy - ry); bottomCtx.lineTo(cx + rx, cy); bottomCtx.lineTo(cx, cy + ry); bottomCtx.lineTo(cx - rx, cy); bottomCtx.closePath(); bottomCtx.stroke();
+                const cx = shapeStart.x + w/2;
+                const cy = shapeStart.y + h/2;
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(cx, shapeStart.y);
+                bottomCtx.lineTo(shapeStart.x + w, cy);
+                bottomCtx.lineTo(cx, shapeStart.y + h);
+                bottomCtx.lineTo(shapeStart.x, cy);
+                bottomCtx.closePath();
+                bottomCtx.stroke();
+            }
+            else if (currentShapeType === 'polygon') {
+                const sides = customPolygonSides;
+                const cx = shapeStart.x + w/2;
+                const cy = shapeStart.y + h/2;
+                const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
+                const points = generatePolygonPoints(cx, cy, radius, sides);
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) bottomCtx.lineTo(points[i].x, points[i].y);
+                bottomCtx.closePath();
+                bottomCtx.stroke();
+            }
+            else if (currentShapeType === 'arrow' || currentShapeType === 'line') {
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(shapeStart.x, shapeStart.y);
+                bottomCtx.lineTo(p.x, p.y);
+                bottomCtx.stroke();
+                if (currentShapeType === 'arrow') {
+                    const angle = Math.atan2(p.y - shapeStart.y, p.x - shapeStart.x);
+                    const sz = Math.min(20, Math.hypot(w, h) * 0.25);
+                    bottomCtx.beginPath();
+                    bottomCtx.moveTo(p.x, p.y);
+                    bottomCtx.lineTo(p.x - sz * Math.cos(angle - Math.PI/6), p.y - sz * Math.sin(angle - Math.PI/6));
+                    bottomCtx.moveTo(p.x, p.y);
+                    bottomCtx.lineTo(p.x - sz * Math.cos(angle + Math.PI/6), p.y - sz * Math.sin(angle + Math.PI/6));
+                    bottomCtx.stroke();
+                }
             }
             bottomCtx.restore();
             return;
         }
         
+        // Drawing smooth line
         if (Math.hypot(p.x - lastX, p.y - lastY) > 1) {
             smoothPoints.push({ x: p.x, y: p.y });
             if (smoothPoints.length > 3) smoothPoints.shift();
@@ -619,8 +817,8 @@
         targetCtx.beginPath();
         targetCtx.moveTo(points[0].x, points[0].y);
         for (let i = 1; i < points.length - 1; i++) {
-            const xc = (points[i].x + points[i+1].x)/2;
-            const yc = (points[i].y + points[i+1].y)/2;
+            const xc = (points[i].x + points[i+1].x) / 2;
+            const yc = (points[i].y + points[i+1].y) / 2;
             targetCtx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
         }
         targetCtx.lineTo(points[points.length-1].x, points[points.length-1].y);
@@ -630,28 +828,98 @@
     }
 
     function handleUp(e) {
-        if (isDraggingObject) { isDraggingObject = false; saveHistory(); redrawAll(); return; }
+        if (isDraggingVertex) {
+            isDraggingVertex = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (isRotating || isResizing) {
+            isRotating = isResizing = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (isDraggingObject) {
+            isDraggingObject = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
         if (!drawing && !currentShapeType) return;
         e.preventDefault();
         
         if (currentShapeType && shapeStart) {
             const p = getCanvasCoords(e);
             if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) > 5) {
+                const w = p.x - shapeStart.x;
+                const h = p.y - shapeStart.y;
                 const obj = { strokeStyle: penColor, lineWidth: penSize, opacity };
-                if (currentShapeType === 'rect') { obj.type = 'rect'; obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(p.x - shapeStart.x); obj.h = Math.abs(p.y - shapeStart.y); }
-                else if (currentShapeType === 'circle') { obj.type = 'circle'; obj.cx = (shapeStart.x + p.x)/2; obj.cy = (shapeStart.y + p.y)/2; obj.rx = Math.abs(p.x - shapeStart.x)/2; obj.ry = Math.abs(p.y - shapeStart.y)/2; }
-                else if (currentShapeType === 'arrow') { obj.type = 'arrow'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
-                else if (currentShapeType === 'line') { obj.type = 'line'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
-                else if (currentShapeType === 'triangle') { const midX = (shapeStart.x + p.x)/2; obj.type = 'triangle'; obj.points = [{ x: shapeStart.x, y: shapeStart.y }, { x: p.x, y: p.y }, { x: midX, y: shapeStart.y - 50 }]; }
-                else if (currentShapeType === 'diamond') { const cx = (shapeStart.x + p.x)/2, cy = (shapeStart.y + p.y)/2, rx = Math.abs(p.x - shapeStart.x)/2, ry = Math.abs(p.y - shapeStart.y)/2; obj.type = 'diamond'; obj.cx = cx; obj.cy = cy; obj.rx = rx; obj.ry = ry; }
+                
+                if (currentShapeType === 'rect') {
+                    obj.type = 'rect';
+                    obj.x = Math.min(shapeStart.x, p.x);
+                    obj.y = Math.min(shapeStart.y, p.y);
+                    obj.w = Math.abs(w);
+                    obj.h = Math.abs(h);
+                }
+                else if (currentShapeType === 'circle') {
+                    obj.type = 'circle';
+                    obj.cx = shapeStart.x + w/2;
+                    obj.cy = shapeStart.y + h/2;
+                    obj.rx = Math.abs(w)/2;
+                    obj.ry = Math.abs(h)/2;
+                }
+                else if (currentShapeType === 'triangle') {
+                    obj.type = 'triangle';
+                    const cx = shapeStart.x + w/2;
+                    obj.points = [
+                        { x: cx, y: shapeStart.y },
+                        { x: shapeStart.x, y: shapeStart.y + h },
+                        { x: shapeStart.x + w, y: shapeStart.y + h }
+                    ];
+                }
+                else if (currentShapeType === 'diamond') {
+                    obj.type = 'diamond';
+                    obj.cx = shapeStart.x + w/2;
+                    obj.cy = shapeStart.y + h/2;
+                    obj.rx = Math.abs(w)/2;
+                    obj.ry = Math.abs(h)/2;
+                }
+                else if (currentShapeType === 'polygon') {
+                    obj.type = 'polygon';
+                    const cx = shapeStart.x + w/2;
+                    const cy = shapeStart.y + h/2;
+                    const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
+                    obj.points = generatePolygonPoints(cx, cy, radius, customPolygonSides);
+                }
+                else if (currentShapeType === 'arrow') {
+                    obj.type = 'arrow';
+                    obj.x1 = shapeStart.x;
+                    obj.y1 = shapeStart.y;
+                    obj.x2 = p.x;
+                    obj.y2 = p.y;
+                }
+                else if (currentShapeType === 'line') {
+                    obj.type = 'line';
+                    obj.x1 = shapeStart.x;
+                    obj.y1 = shapeStart.y;
+                    obj.x2 = p.x;
+                    obj.y2 = p.y;
+                }
                 objects.push(obj);
                 saveHistory();
             }
-            currentShapeType = null; shapeStart = null; drawing = false;
+            currentShapeType = null;
+            shapeStart = null;
+            drawing = false;
             redrawAll();
             return;
         }
-        drawing = false; smoothPoints = []; redrawAll();
+        
+        drawing = false;
+        smoothPoints = [];
+        redrawAll();
     }
 
     function floodFill(x, y) {
@@ -674,34 +942,62 @@
         redrawAll();
         saveHistory();
     }
+    
     function hexToRgb(h) { return { r: parseInt(h.slice(1,3),16), g: parseInt(h.slice(3,5),16), b: parseInt(h.slice(5,7),16) }; }
 
-    // PDF and file handlers
-    async function loadPDF(file) {
-        const data = await file.arrayBuffer();
-        pdfDoc = await pdfjsLib.getDocument({ data }).promise;
-        const page = await pdfDoc.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-        setCanvasSize(viewport.width, viewport.height);
-        bgCtx.fillStyle = 'white';
-        bgCtx.fillRect(0, 0, viewport.width, viewport.height);
-        await page.render({ canvasContext: bgCtx, viewport }).promise;
-        redrawAll();
-        saveHistory();
+    // ========== RECORDING (Simplified) ==========
+    async function toggleRecording() {
+        if (isRecording) {
+            if (mediaRecorder) mediaRecorder.stop();
+            isRecording = false;
+            document.getElementById('recIndicator').style.display = 'none';
+            document.getElementById('recordBtn').innerHTML = '🔴 Rec';
+            return;
+        }
+        try {
+            const stream = topCanvas.captureStream(30);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            recordedChunks = [];
+            mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `whiteboard-${Date.now()}.webm`;
+                a.click();
+            };
+            mediaRecorder.start(1000);
+            isRecording = true;
+            document.getElementById('recIndicator').style.display = 'block';
+            document.getElementById('recordBtn').innerHTML = '⏹️ Stop';
+        } catch (e) { alert('Recording error: ' + e.message); }
+    }
+    
+    async function toggleMic() {
+        if (micStream) {
+            micStream.getTracks().forEach(t => t.stop());
+            micStream = null;
+            micEnabled = false;
+            document.getElementById('micBtn').classList.remove('active');
+        } else {
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                micEnabled = true;
+                document.getElementById('micBtn').classList.add('active');
+            } catch (e) { alert('Microphone access denied'); }
+        }
     }
 
+    // ========== TOOL FUNCTIONS ==========
     function setTool(t) {
         currentTool = t;
-        ['drawBtn','markerBtn','highlighterBtn','eraseBtn','fillBtn','selectBtn','rectBtn','circleBtn','arrowBtn','lineBtn','triangleBtn','diamondBtn'].forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn) btn.classList.remove('active');
-        });
-        const mapping = { 'draw':'drawBtn','marker':'markerBtn','highlighter':'highlighterBtn','eraser':'eraseBtn','fill':'fillBtn','select':'selectBtn','rect':'rectBtn','circle':'circleBtn','arrow':'arrowBtn','line':'lineBtn','triangle':'triangleBtn','diamond':'diamondBtn' };
-        if (currentTool !== 'none' && mapping[currentTool]) document.getElementById(mapping[currentTool]).classList.add('active');
+        document.querySelectorAll('#drawBtn, #markerBtn, #highlighterBtn, #eraseBtn, #fillBtn, #selectBtn, #rectBtn, #circleBtn, #triangleBtn, #diamondBtn, #polygonBtn, #arrowBtn, #lineBtn').forEach(btn => btn.classList.remove('active'));
+        const map = { 'draw':'drawBtn', 'marker':'markerBtn', 'highlighter':'highlighterBtn', 'eraser':'eraseBtn', 'fill':'fillBtn', 'select':'selectBtn', 'rect':'rectBtn', 'circle':'circleBtn', 'triangle':'triangleBtn', 'diamond':'diamondBtn', 'polygon':'polygonBtn', 'arrow':'arrowBtn', 'line':'lineBtn' };
+        if (map[t]) document.getElementById(map[t]).classList.add('active');
         redrawAll();
     }
 
-    // UI Bindings
+    // ========== UI BINDINGS ==========
     document.getElementById('drawBtn').onclick = () => setTool('draw');
     document.getElementById('markerBtn').onclick = () => setTool('marker');
     document.getElementById('highlighterBtn').onclick = () => setTool('highlighter');
@@ -710,29 +1006,72 @@
     document.getElementById('selectBtn').onclick = () => setTool('select');
     document.getElementById('rectBtn').onclick = () => setTool('rect');
     document.getElementById('circleBtn').onclick = () => setTool('circle');
-    document.getElementById('arrowBtn').onclick = () => setTool('arrow');
-    document.getElementById('lineBtn').onclick = () => setTool('line');
     document.getElementById('triangleBtn').onclick = () => setTool('triangle');
     document.getElementById('diamondBtn').onclick = () => setTool('diamond');
-
-    document.getElementById('editToggleBtn').onclick = () => { editingEnabled = !editingEnabled; document.getElementById('editToggleBtn').classList.toggle('active', editingEnabled); redrawAll(); };
-    document.getElementById('vertexEditBtn').onclick = () => { vertexEditEnabled = !vertexEditEnabled; document.getElementById('vertexEditBtn').classList.toggle('active', vertexEditEnabled); redrawAll(); };
-    document.getElementById('textBtn').onclick = () => { const t = prompt('Enter text:', 'Text'); if(t) { objects.push({ type: 'text', text: t, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: penSize*5, color: penColor }); redrawAll(); saveHistory(); } };
-    document.getElementById('rotateLeftBtn').onclick = () => { if(selectedObjectIndex>=0) { objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation||0)-15; redrawAll(); saveHistory(); } };
-    document.getElementById('rotateRightBtn').onclick = () => { if(selectedObjectIndex>=0) { objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation||0)+15; redrawAll(); saveHistory(); } };
-    document.getElementById('flipHBtn').onclick = () => { if(selectedObjectIndex>=0) { objects[selectedObjectIndex].flipH = !objects[selectedObjectIndex].flipH; redrawAll(); saveHistory(); } };
-    document.getElementById('flipVBtn').onclick = () => { if(selectedObjectIndex>=0) { objects[selectedObjectIndex].flipV = !objects[selectedObjectIndex].flipV; redrawAll(); saveHistory(); } };
-    document.getElementById('deleteObjBtn').onclick = () => { if(selectedObjectIndex>=0) { objects.splice(selectedObjectIndex,1); selectedObjectIndex=-1; redrawAll(); saveHistory(); } };
+    document.getElementById('polygonBtn').onclick = () => {
+        customPolygonSides = parseInt(document.getElementById('polygonSides').value) || 5;
+        setTool('polygon');
+    };
+    document.getElementById('arrowBtn').onclick = () => setTool('arrow');
+    document.getElementById('lineBtn').onclick = () => setTool('line');
+    
+    document.getElementById('editToggleBtn').onclick = () => {
+        editingEnabled = !editingEnabled;
+        vertexEditEnabled = false;
+        document.getElementById('editToggleBtn').classList.toggle('active', editingEnabled);
+        document.getElementById('vertexEditBtn').classList.remove('active');
+        redrawAll();
+    };
+    document.getElementById('vertexEditBtn').onclick = () => {
+        vertexEditEnabled = !vertexEditEnabled;
+        editingEnabled = true;
+        document.getElementById('vertexEditBtn').classList.toggle('active', vertexEditEnabled);
+        document.getElementById('editToggleBtn').classList.add('active');
+        redrawAll();
+    };
+    
+    document.getElementById('textBtn').onclick = () => {
+        const t = prompt('Enter text:', 'Text');
+        if (t) {
+            objects.push({ type: 'text', text: t, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: penSize*5, color: penColor });
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('rotateLeftBtn').onclick = () => {
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation || 0) - 15;
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('rotateRightBtn').onclick = () => {
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation || 0) + 15;
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('deleteObjBtn').onclick = () => {
+        if (selectedObjectIndex >= 0) {
+            objects.splice(selectedObjectIndex, 1);
+            selectedObjectIndex = -1;
+            redrawAll(); saveHistory();
+        }
+    };
     document.getElementById('undoBtn').onclick = undo;
     document.getElementById('redoBtn').onclick = redo;
-    document.getElementById('clearBtn').onclick = () => { drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height); highlighterCtx.clearRect(0,0,highlighterLayer.width,highlighterLayer.height); objects = []; selectedObjectIndex = -1; redrawAll(); saveHistory(); };
+    document.getElementById('clearBtn').onclick = () => {
+        drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height);
+        highlighterCtx.clearRect(0,0,highlighterLayer.width,highlighterLayer.height);
+        objects = []; selectedObjectIndex = -1;
+        redrawAll(); saveHistory();
+    };
     document.getElementById('penColor').oninput = e => penColor = e.target.value;
     document.getElementById('brushSize').oninput = e => { penSize = +e.target.value; document.getElementById('sizeLabel').textContent = penSize+'px'; };
     document.getElementById('opacitySlider').oninput = e => opacity = +e.target.value;
     document.getElementById('themeBtn').onclick = () => document.body.classList.toggle('light');
     document.getElementById('exportImgBtn').onclick = () => { const a = document.createElement('a'); a.download = 'board.png'; a.href = topCanvas.toDataURL(); a.click(); };
-    document.getElementById('printBtn').onclick = () => { const w = window.open(); w.document.write('<img src="'+topCanvas.toDataURL()+'"/>'); w.print(); };
-
+    document.getElementById('recordBtn').onclick = toggleRecording;
+    document.getElementById('micBtn').onclick = toggleMic;
+    
     // Color palette
     const colors = ['#000000','#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#ffffff'];
     const paletteDiv = document.getElementById('colorPalette');
@@ -743,12 +1082,23 @@
         swatch.onclick = () => { penColor = c; document.getElementById('penColor').value = c; };
         paletteDiv.appendChild(swatch);
     });
-
-    // File uploads
-    document.getElementById('pdfFile').addEventListener('change', e => { if(e.target.files[0]) loadPDF(e.target.files[0]); });
+    
+    // File handlers
+    document.getElementById('pdfFile').addEventListener('change', async e => {
+        if (!e.target.files[0]) return;
+        const data = await e.target.files[0].arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        setCanvasSize(viewport.width, viewport.height);
+        bgCtx.fillStyle = 'white';
+        bgCtx.fillRect(0, 0, viewport.width, viewport.height);
+        await page.render({ canvasContext: bgCtx, viewport }).promise;
+        redrawAll(); saveHistory();
+    });
     document.getElementById('imgFile').addEventListener('change', e => {
         const file = e.target.files[0];
-        if(!file) return;
+        if (!file) return;
         const img = new Image();
         img.onload = () => {
             const w = Math.min(300, bgCanvas.width * 0.35);
@@ -758,25 +1108,20 @@
         };
         img.src = URL.createObjectURL(file);
     });
-
+    
     document.getElementById('latexBtn').onclick = () => document.getElementById('latexModal').style.display = 'flex';
     document.getElementById('closeLatexModal').onclick = () => document.getElementById('latexModal').style.display = 'none';
     document.getElementById('insertLatexBtn').onclick = () => {
         const latex = document.getElementById('latexInput').value.trim();
-        if(latex) alert("LaTeX inserted: " + latex);
+        if (latex) alert("LaTeX inserted: " + latex);
         document.getElementById('latexModal').style.display = 'none';
     };
-
+    
     document.getElementById('toggleSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
     document.getElementById('slidePanelBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
     document.getElementById('closeSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.remove('open');
-
-    // Recording buttons
-    document.getElementById('recordBtn').onclick = toggleRecording;
-    document.getElementById('micBtn').onclick = toggleMic;
-
-    // ========== PAN & ZOOM ==========
-    // Wheel Zoom
+    
+    // Zoom & Pan
     bottomCanvas.addEventListener('wheel', e => {
         e.preventDefault();
         const rect = bottomCanvas.getBoundingClientRect();
@@ -790,8 +1135,7 @@
         scale = newScale;
         redrawAll();
     }, { passive: false });
-
-    // Right-click Pan
+    
     let isPanning = false, panStartX, panStartY, panStartOffX, panStartOffY;
     bottomCanvas.addEventListener('mousedown', e => {
         if (e.button === 2) {
@@ -810,58 +1154,22 @@
     });
     window.addEventListener('mouseup', () => { isPanning = false; });
     bottomCanvas.addEventListener('contextmenu', e => e.preventDefault());
-
-    // Pinch Zoom for mobile
-    let initialPinchDist = 0, initialScale = 1, pinchCenter = null;
-    bottomCanvas.addEventListener('touchstart', e => {
-        if (e.touches.length === 2) {
-            e.preventDefault();
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            initialPinchDist = Math.hypot(dx, dy);
-            initialScale = scale;
-            const rect = bottomCanvas.getBoundingClientRect();
-            const cx = (e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left;
-            const cy = (e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top;
-            pinchCenter = {
-                x: ((cx / rect.width) * bottomCanvas.width - offsetX) / scale,
-                y: ((cy / rect.height) * bottomCanvas.height - offsetY) / scale
-            };
-        }
-    }, { passive: false });
-    bottomCanvas.addEventListener('touchmove', e => {
-        if (e.touches.length === 2) {
-            e.preventDefault();
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            const newDist = Math.hypot(dx, dy);
-            const newScale = initialScale * (newDist / initialPinchDist);
-            scale = Math.min(12, Math.max(0.15, newScale));
-            const rect = bottomCanvas.getBoundingClientRect();
-            const cx = (e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left;
-            const cy = (e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top;
-            offsetX = (cx / rect.width) * bottomCanvas.width - pinchCenter.x * scale;
-            offsetY = (cy / rect.height) * bottomCanvas.height - pinchCenter.y * scale;
-            redrawAll();
-        }
-    }, { passive: false });
-    bottomCanvas.addEventListener('touchend', () => { initialPinchDist = 0; });
-
-    // Drawing events
+    
+    // Touch events
     bottomCanvas.addEventListener('mousedown', handleDown);
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
-    bottomCanvas.addEventListener('touchstart', e => { if(e.touches.length === 1) handleDown(e); }, { passive: false });
-    bottomCanvas.addEventListener('touchmove', e => { if(e.touches.length === 1) handleMove(e); }, { passive: false });
+    bottomCanvas.addEventListener('touchstart', e => { if (e.touches.length === 1) handleDown(e); }, { passive: false });
+    bottomCanvas.addEventListener('touchmove', e => { if (e.touches.length === 1) handleMove(e); }, { passive: false });
     bottomCanvas.addEventListener('touchend', handleUp);
-
-    // Initial setup
+    
+    // Initialize
     setCanvasSize(1200, 800);
     bgCtx.fillStyle = 'white';
     bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
     redrawAll();
-    console.log('✅ Whiteboard ready! Pan & Zoom working! Audio recording working!');
+    console.log('✅ Whiteboard ready! Rectangle, Triangle, Polygon(N sides), Vertex Edit all working!');
 </script>
 </body>
 </html>
