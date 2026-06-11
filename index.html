@@ -166,15 +166,20 @@
       let audioStream = null;
       let canvasStream = null;
 
-      // ── TOUCH STATE ──
-      let touchCount = 0;                    // how many fingers currently
-      let pinchActive = false;
-      let initialPinchDist = 0;
-      let initialZoom = 1;
-      let initialPan = {x:0,y:0};
-      let pinchCenter = {x:0,y:0};          // mid-point in screen coords
-      let lastPinchCenter = {x:0,y:0};      // for pan-during-pinch
-      let activePointerIds = new Set();     // track pointer ids
+      // ═══════════════════════════════════
+      // TOUCH TRACKING - THE KEY FIX
+      // ═══════════════════════════════════
+      let activeTouches = new Map();  // pointerId -> {clientX, clientY, time}
+      let isMultiTouch = false;
+      let pinchStartDist = 0;
+      let pinchStartZoom = 1;
+      let pinchStartPan = {x:0, y:0};
+      let pinchStartCenter = {x:0, y:0};  // in canvas pixel coords
+      let lastPinchCenter = {x:0, y:0};
+      
+      // Debounce: wait 150ms after first touch before starting single-finger action
+      let pendingSingleTouch = null;
+      const MULTI_TOUCH_THRESHOLD = 200; // ms - if second finger arrives within this, it's multi-touch
 
       function resizeCanvases() {
         const topRect = topWrapper.getBoundingClientRect();
@@ -335,141 +340,227 @@
       }
 
       function screenToWorld(sx,sy){ return {x:(sx-panX)/zoom, y:(sy-panY)/zoom}; }
-      function getBottomCoords(e){
-        const rect=bottomCanvas.getBoundingClientRect();
-        return screenToWorld((e.clientX-rect.left)*(WORLD_W/rect.width), (e.clientY-rect.top)*(WORLD_H/rect.height));
+      
+      function getBottomCanvasCoords(e) {
+        const rect = bottomCanvas.getBoundingClientRect();
+        return {
+          sx: (e.clientX - rect.left) * (WORLD_W / rect.width),
+          sy: (e.clientY - rect.top) * (WORLD_H / rect.height)
+        };
+      }
+      
+      function getBottomWorldCoords(e) {
+        const c = getBottomCanvasCoords(e);
+        return screenToWorld(c.sx, c.sy);
       }
 
       // ══════════════════════════════════════
-      // UNIFIED POINTER HANDLER (Mouse + Touch)
+      // POINTER EVENTS - DEBOUNCED FOR MULTI-TOUCH
       // ══════════════════════════════════════
       
       bottomCanvas.addEventListener('pointerdown', (e) => {
-        activePointerIds.add(e.pointerId);
-        touchCount = activePointerIds.size;
+        e.preventDefault();
         
-        // IF 2+ fingers → always ZOOM/PAN mode, NEVER draw
-        if (touchCount >= 2) {
-          pinchActive = true;
-          isDrawing = false;
-          currentStroke = null;
-          if (window._drawingShape) { shapes.pop(); window._drawingShape = null; }
-          
-          // Calculate initial pinch distance & center
-          const rect = bottomCanvas.getBoundingClientRect();
-          const pointers = getActivePointers();
-          if (pointers.length >= 2) {
-            const dx = pointers[0].clientX - pointers[1].clientX;
-            const dy = pointers[0].clientY - pointers[1].clientY;
-            initialPinchDist = Math.hypot(dx, dy);
-            initialZoom = zoom;
-            initialPan = {x: panX, y: panY};
-            pinchCenter = {
-              x: ((pointers[0].clientX + pointers[1].clientX) / 2 - rect.left) * (WORLD_W / rect.width),
-              y: ((pointers[0].clientY + pointers[1].clientY) / 2 - rect.top) * (WORLD_H / rect.height)
-            };
-            lastPinchCenter = {...pinchCenter};
+        // Store this touch
+        activeTouches.set(e.pointerId, {
+          clientX: e.clientX,
+          clientY: e.clientY,
+          time: Date.now()
+        });
+        
+        const count = activeTouches.size;
+        
+        // If this is the SECOND finger arriving
+        if (count === 2) {
+          // Cancel any pending single-touch action
+          if (pendingSingleTouch) {
+            clearTimeout(pendingSingleTouch);
+            pendingSingleTouch = null;
           }
+          // Cancel any in-progress drawing
+          if (isDrawing) {
+            isDrawing = false;
+            currentStroke = null;
+          }
+          if (window._drawingShape) {
+            shapes.pop();
+            window._drawingShape = null;
+          }
+          isPanning = false;
+          
+          // Initialize pinch
+          isMultiTouch = true;
+          const touches = Array.from(activeTouches.values());
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          pinchStartDist = Math.hypot(dx, dy);
+          pinchStartZoom = zoom;
+          pinchStartPan = {x: panX, y: panY};
+          
+          // Calculate center in canvas coords
+          const midX = (touches[0].clientX + touches[1].clientX) / 2;
+          const midY = (touches[0].clientY + touches[1].clientY) / 2;
+          const coords = getBottomCanvasCoords({clientX: midX, clientY: midY});
+          pinchStartCenter = {x: coords.sx, y: coords.sy};
+          lastPinchCenter = {x: coords.sx, y: coords.sy};
+          
           renderAll();
           return;
         }
         
-        // SINGLE finger → normal tool behavior
-        pinchActive = false;
-        e.preventDefault();
-        const coords = getBottomCoords(e);
+        // If this is the FIRST finger (count === 1)
+        if (count === 1 && !isMultiTouch) {
+          // Wait a short time to see if a second finger arrives
+          pendingSingleTouch = setTimeout(() => {
+            pendingSingleTouch = null;
+            // No second finger arrived - execute single-touch action
+            executeSingleTouchAction(e);
+          }, MULTI_TOUCH_THRESHOLD);
+        }
+      });
+
+      function executeSingleTouchAction(e) {
+        if (isMultiTouch) return; // Safety check
         
-        if (currentTool === 'pan' || (e.button === 1)) { startPan(e); return; }
+        const worldCoords = getBottomWorldCoords(e);
+        
+        if (currentTool === 'pan' || (e.button === 1)) {
+          startPan(e);
+          return;
+        }
         if (editMode && currentTool === 'edit') {
           if (selectedItem) {
             const item = getSelectedItemObject();
-            if (item) { const handle = getHandleAt(e, item); if (handle) { startEditDrag(e, selectedItem, handle); return; } }
+            if (item) {
+              const handle = getHandleAt(e, item);
+              if (handle) { startEditDrag(e, selectedItem, handle); return; }
+            }
           }
-          const hit = hitTest(coords.x, coords.y);
-          if (hit) { selectItem(hit); startEditDrag(e, hit, 'move'); } else { deselectAll(); renderAll(); }
+          const hit = hitTest(worldCoords.x, worldCoords.y);
+          if (hit) { selectItem(hit); startEditDrag(e, hit, 'move'); }
+          else { deselectAll(); renderAll(); }
           return;
         }
         if (currentTool === 'pen' || currentTool === 'eraser') {
-          saveState(); isDrawing = true;
-          currentStroke = { id: nextId++, type: currentTool==='eraser'?'eraser':'pen', points: [{x:coords.x,y:coords.y}], color: currentTool==='eraser'?'#000':penColor, size: currentTool==='eraser'?20:penSize };
-          strokes.push(currentStroke); renderAll();
+          saveState();
+          isDrawing = true;
+          currentStroke = {
+            id: nextId++,
+            type: currentTool === 'eraser' ? 'eraser' : 'pen',
+            points: [{x: worldCoords.x, y: worldCoords.y}],
+            color: currentTool === 'eraser' ? '#000' : penColor,
+            size: currentTool === 'eraser' ? 20 : penSize
+          };
+          strokes.push(currentStroke);
+          renderAll();
         } else if (currentTool === 'strokeEraser') {
-          const idx = strokes.findIndex(s => s.type!=='eraser' && pointNearStroke(coords, s, 15));
-          if (idx !== -1) { saveState(); strokes.splice(idx, 1); renderAll(); }
+          const hitIdx = strokes.findIndex(s => s.type !== 'eraser' && pointNearStroke(worldCoords, s, 15));
+          if (hitIdx !== -1) { saveState(); strokes.splice(hitIdx, 1); renderAll(); }
         } else if (currentTool.startsWith('shape-')) {
           saveState();
-          const shape = { id: nextId++, type: currentTool.replace('shape-',''), x: coords.x, y: coords.y, w: 0, h: 0, rotation: 0, color: penColor, fill: 'transparent', selected: false };
-          shapes.push(shape); isDrawing = false; currentStroke = null;
-          startShapeDraw(shape, coords);
+          const shape = {
+            id: nextId++,
+            type: currentTool.replace('shape-', ''),
+            x: worldCoords.x, y: worldCoords.y, w: 0, h: 0,
+            rotation: 0, color: penColor, fill: 'transparent', selected: false
+          };
+          shapes.push(shape);
+          isDrawing = false;
+          currentStroke = null;
+          startShapeDraw(shape, worldCoords);
         }
-      });
+      }
 
       bottomCanvas.addEventListener('pointermove', (e) => {
-        // Update pointer positions
-        activePointerIds.add(e.pointerId);
-        touchCount = activePointerIds.size;
+        // Update stored position for this touch
+        if (activeTouches.has(e.pointerId)) {
+          activeTouches.set(e.pointerId, {
+            ...activeTouches.get(e.pointerId),
+            clientX: e.clientX,
+            clientY: e.clientY
+          });
+        }
         
-        // IF pinch is active (2+ fingers)
-        if (pinchActive && touchCount >= 2) {
-          const rect = bottomCanvas.getBoundingClientRect();
-          const pointers = getActivePointers();
-          if (pointers.length >= 2) {
-            const dx = pointers[0].clientX - pointers[1].clientX;
-            const dy = pointers[0].clientY - pointers[1].clientY;
-            const dist = Math.hypot(dx, dy);
+        // Multi-touch: pinch + pan
+        if (isMultiTouch && activeTouches.size >= 2) {
+          const touches = Array.from(activeTouches.values());
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          const dist = Math.hypot(dx, dy);
+          
+          // Calculate new center
+          const midX = (touches[0].clientX + touches[1].clientX) / 2;
+          const midY = (touches[0].clientY + touches[1].clientY) / 2;
+          const newCenter = getBottomCanvasCoords({clientX: midX, clientY: midY});
+          
+          // Pan: move with center delta
+          const panDx = newCenter.sx - lastPinchCenter.x;
+          const panDy = newCenter.sy - lastPinchCenter.y;
+          panX += panDx;
+          panY += panDy;
+          
+          // Zoom: scale relative to start
+          if (pinchStartDist > 0) {
+            const scale = dist / pinchStartDist;
+            const newZoom = Math.min(8, Math.max(0.5, pinchStartZoom * scale));
             
-            // Calculate new pinch center
-            const newCenter = {
-              x: ((pointers[0].clientX + pointers[1].clientX) / 2 - rect.left) * (WORLD_W / rect.width),
-              y: ((pointers[0].clientY + pointers[1].clientY) / 2 - rect.top) * (WORLD_H / rect.height)
-            };
-            
-            // Pan: move with pinch center
-            const panDx = newCenter.x - lastPinchCenter.x;
-            const panDy = newCenter.y - lastPinchCenter.y;
-            panX += panDx;
-            panY += panDy;
-            
-            // Zoom
-            if (initialPinchDist > 0) {
-              const scale = dist / initialPinchDist;
-              const newZoom = Math.min(8, Math.max(0.5, initialZoom * scale));
-              
-              // Adjust pan to keep pinch center stable during zoom
-              const worldBefore = screenToWorld(newCenter.x, newCenter.y);
-              zoom = newZoom;
-              const worldAfter = screenToWorld(newCenter.x, newCenter.y);
-              panX += (worldAfter.x - worldBefore.x) * zoom;
-              panY += (worldAfter.y - worldBefore.y) * zoom;
-            }
-            
-            lastPinchCenter = newCenter;
-            clampPan();
-            renderAll();
+            // Adjust pan to keep pinch-start center stable
+            const worldBefore = screenToWorld(pinchStartCenter.x, pinchStartCenter.y);
+            zoom = newZoom;
+            const worldAfter = screenToWorld(pinchStartCenter.x, pinchStartCenter.y);
+            panX += (worldAfter.x - worldBefore.x) * zoom;
+            panY += (worldAfter.y - worldBefore.y) * zoom;
           }
+          
+          lastPinchCenter = newCenter;
+          clampPan();
+          renderAll();
           return;
         }
         
-        // Single finger move
+        // Single touch: normal behavior
+        if (isMultiTouch) return; // Don't process single moves during multi-touch
+        
+        // Cancel pending single if finger moves significantly (optional)
+        if (pendingSingleTouch) {
+          // Could cancel, but let's keep it - user may just be slow
+        }
+        
         if (isPanning) {
           panX = panStartPan.x + (e.clientX - panStartMouse.x);
           panY = panStartPan.y + (e.clientY - panStartMouse.y);
-          clampPan(); renderAll(); return;
+          clampPan();
+          renderAll();
+          return;
         }
         if (editDragMode && selectedItem) { handleEditDrag(e); return; }
-        if (isDrawing && currentStroke) { currentStroke.points.push(getBottomCoords(e)); renderAll(); }
-        if (window._drawingShape) updateShapeDraw(window._drawingShape, getBottomCoords(e));
+        if (isDrawing && currentStroke) {
+          currentStroke.points.push(getBottomWorldCoords(e));
+          renderAll();
+        }
+        if (window._drawingShape) updateShapeDraw(window._drawingShape, getBottomWorldCoords(e));
       });
 
       window.addEventListener('pointerup', (e) => {
-        activePointerIds.delete(e.pointerId);
-        touchCount = activePointerIds.size;
+        // Remove touch
+        activeTouches.delete(e.pointerId);
         
-        // If pinch just ended (went from 2→1 or 2→0)
-        if (pinchActive && touchCount < 2) {
-          pinchActive = false;
-          initialPinchDist = 0;
-          if (touchCount === 0) {
+        // If multi-touch ended
+        if (isMultiTouch && activeTouches.size < 2) {
+          isMultiTouch = false;
+          pinchStartDist = 0;
+          
+          // If one finger remains, it becomes a regular touch
+          if (activeTouches.size === 1) {
+            // Don't auto-start drawing - user needs to lift and re-tap
+            isDrawing = false;
+            currentStroke = null;
+            isPanning = false;
+            bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair');
+          }
+          if (activeTouches.size === 0) {
+            isDrawing = false;
+            currentStroke = null;
             isPanning = false;
             bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair');
           }
@@ -477,35 +568,24 @@
           return;
         }
         
-        if (touchCount === 0) {
+        // Single touch ended
+        if (!isMultiTouch && activeTouches.size === 0) {
+          // Cancel any pending single-touch action
+          if (pendingSingleTouch) {
+            clearTimeout(pendingSingleTouch);
+            pendingSingleTouch = null;
+          }
+          
           if (isPanning) { isPanning = false; bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair'); return; }
           if (isDrawing) { isDrawing = false; currentStroke = null; renderAll(); }
-          if (window._drawingShape) { if (window._drawingShape.w<5||window._drawingShape.h<5) shapes.pop(); window._drawingShape = null; renderAll(); }
+          if (window._drawingShape) {
+            if (window._drawingShape.w < 5 || window._drawingShape.h < 5) shapes.pop();
+            window._drawingShape = null;
+            renderAll();
+          }
           if (editDragMode) { editDragMode = null; editStart = null; editItemStart = null; editHandle = null; renderAll(); }
         }
       });
-
-      // Track all active pointers
-      function getActivePointers() {
-        const ptrs = [];
-        // We can't easily enumerate all active pointers, so we track via events
-        // Instead, we'll use a different approach: store last known positions
-        if (window._lastPointers) return window._lastPointers;
-        return [];
-      }
-      
-      // Store pointer positions on every move
-      window._lastPointers = [];
-      bottomCanvas.addEventListener('pointermove', function storePointer(e) {
-        const existing = window._lastPointers.findIndex(p => p.pointerId === e.pointerId);
-        if (existing >= 0) window._lastPointers[existing] = {pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY};
-        else window._lastPointers.push({pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY});
-      });
-      window.addEventListener('pointerup', function removePointer(e) {
-        window._lastPointers = window._lastPointers.filter(p => p.pointerId !== e.pointerId);
-      });
-      // Override getActivePointers
-      getActivePointers = function() { return window._lastPointers || []; };
 
       function startPan(e) { isPanning=true; panStartMouse={x:e.clientX,y:e.clientY}; panStartPan={x:panX,y:panY}; bottomCanvas.style.cursor='grabbing'; }
       function startShapeDraw(shape,coords) { window._drawingShape=shape; shape.x=coords.x; shape.y=coords.y; }
@@ -514,7 +594,7 @@
       // Wheel zoom
       bottomCanvas.addEventListener('wheel', (e) => {
         e.preventDefault();
-        if (pinchActive) return; // don't wheel-zoom during pinch
+        if (isMultiTouch) return;
         const rect = bottomCanvas.getBoundingClientRect();
         const sx = (e.clientX-rect.left)*(WORLD_W/rect.width), sy = (e.clientY-rect.top)*(WORLD_H/rect.height);
         const wb = screenToWorld(sx,sy);
@@ -542,8 +622,8 @@
         return null;
       }
       function getHandleAt(e,item){
-        const rect=bottomCanvas.getBoundingClientRect();
-        const world=screenToWorld((e.clientX-rect.left)*(WORLD_W/rect.width),(e.clientY-rect.top)*(WORLD_H/rect.height));
+        const c = getBottomCanvasCoords(e);
+        const world = screenToWorld(c.sx, c.sy);
         const bbox={x:item.x-6,y:item.y-6,w:item.w+12,h:item.h+12};
         if(Math.hypot(world.x-(bbox.x+bbox.w/2),world.y-(bbox.y-16))<12) return 'rotate';
         const handles=[{n:'top-left',x:bbox.x,y:bbox.y},{n:'top-right',x:bbox.x+bbox.w,y:bbox.y},{n:'bottom-left',x:bbox.x,y:bbox.y+bbox.h},{n:'bottom-right',x:bbox.x+bbox.w,y:bbox.y+bbox.h},{n:'top',x:bbox.x+bbox.w/2,y:bbox.y},{n:'bottom',x:bbox.x+bbox.w/2,y:bbox.y+bbox.h},{n:'left',x:bbox.x,y:bbox.y+bbox.h/2},{n:'right',x:bbox.x+bbox.w,y:bbox.y+bbox.h/2}];
@@ -571,8 +651,8 @@
           }
           item.x=nx;item.y=ny;item.w=Math.max(10,nw);item.h=Math.max(10,nh);
         } else if(editDragMode==='rotate'){
-          const rect=bottomCanvas.getBoundingClientRect();
-          const world=screenToWorld((e.clientX-rect.left)*(WORLD_W/rect.width),(e.clientY-rect.top)*(WORLD_H/rect.height));
+          const c = getBottomCanvasCoords(e);
+          const world = screenToWorld(c.sx, c.sy);
           const cx=editItemStart.x+editItemStart.w/2, cy=editItemStart.y+editItemStart.h/2;
           item.rotation=Math.atan2(world.y-cy,world.x-cx)*180/Math.PI;
         }
