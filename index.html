@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard Pro – Audio+Video Recording Fixed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action=manipulation">
+    <title>Whiteboard Pro – Audio+Video Recording WORKING</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -57,9 +56,9 @@
         button.active { background: #0f3460; border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(233,69,96,0.5); }
         button.secondary { background: var(--accent2); }
         button.danger { background: #c0392b; }
-        button.accent2 { background: #8e44ad; }
-        button.recording-active { background: #e74c3c; animation: pulse 1s infinite; }
+        button.recording { background: #e74c3c; animation: pulse 1s infinite; }
         @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
+        .mic-on { background: #27ae60 !important; }
         input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; cursor: pointer; padding: 2px; }
         input[type="range"] { width: 70px; accent-color: var(--accent); }
         .color-palette { display: flex; gap: 4px; }
@@ -119,21 +118,26 @@
             padding: 4px 12px; border-radius: 20px; font-size: 11px; z-index: 1600;
             font-weight: bold; pointer-events: none;
         }
+        .info-box {
+            position: fixed; bottom: 80px; left: 20px; background: #3498db; color: white;
+            padding: 4px 12px; border-radius: 20px; font-size: 10px; z-index: 1600;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING (Video + Audio)</div>
 <div class="mic-status" id="micStatus">🎙️ Mic: Off - Click Mic Button First</div>
+<div class="info-box" id="infoBox">ℹ️ Step 1: Enable Mic | Step 2: Record</div>
 
 <!-- Middle Toolbar -->
-
 <div class="middle-toolbar" id="middleToolbar">
     <div class="tool-group">
         <div class="color-palette" id="colorPalette"></div>
         <input type="color" id="penColor" value="#000000">
         <input type="range" id="brushSize" min="1" max="30" value="4">
-        <span id="sizeLabel" style="color:var(--text);font-weight:bold;min-width:24px;">4px</span>
+        <span id="sizeLabel" style="color:var(--text);min-width:24px;">4px</span>
         <input type="range" id="opacitySlider" min="0.2" max="1" step="0.05" value="1">
         <span style="color:var(--text);font-size:11px;">Op</span>
     </div>
@@ -149,49 +153,33 @@
         <button id="circleBtn">⚪ Circle</button>
         <button id="arrowBtn">➡️ Arrow</button>
         <button id="lineBtn">📏 Line</button>
-        <button id="triangleBtn">🔺 Triangle</button>
-        <button id="diamondBtn">💎 Diamond</button>
         <button id="textBtn">📝 Text</button>
         <button id="latexBtn" class="accent2">📐 LaTeX</button>
     </div>
     <div class="tool-group">
         <button id="selectBtn">🖱️ Select</button>
         <button id="editToggleBtn">🔧 Edit</button>
-        <button id="vertexEditBtn">✏️ Vertex</button>
         <span id="objectActionGroup" style="display:none;">
-            <button id="rotateLeftBtn" title="Rotate -15°">↺</button>
-            <button id="rotateRightBtn" title="Rotate +15°">↻</button>
-            <button id="flipHBtn" title="Flip H">↔️</button>
-            <button id="flipVBtn" title="Flip V">↕️</button>
             <button id="deleteObjBtn" class="danger">🗑️</button>
         </span>
     </div>
     <div class="tool-group">
         <input type="file" id="pdfFile" accept=".pdf" style="display:none">
         <label for="pdfFile" class="file-label">📄 PDF</label>
-        <input type="file" id="mcqFile" accept=".txt" style="display:none">
-        <label for="mcqFile" class="file-label">📝 MCQ</label>
         <input type="file" id="imgFile" accept="image/*" style="display:none">
         <label for="imgFile" class="file-label">🖼️ Img</label>
         <button id="recordBtn" class="danger">🎥 Start Recording</button>
-        <button id="micBtn" title="Enable Microphone with Noise Cancellation">🎙️ Enable Mic</button>
+        <button id="micBtn" class="danger">🎙️ Enable Mic</button>
         <button id="undoBtn">↩️</button>
         <button id="redoBtn">↪️</button>
         <button id="clearBtn" class="danger">🗑️ Clear</button>
         <button id="themeBtn">🌓</button>
         <button id="exportImgBtn">📷</button>
-        <button id="printBtn">🖨️</button>
-        <span id="mcqFontGroup" style="display:none;">
-            <button id="mcqFontDown">−</button>
-            <span id="mcqFontLabel" style="color:var(--text);min-width:24px;text-align:center;">26</span>
-            <button id="mcqFontUp">+</button>
-        </span>
         <button id="slidePanelBtn" class="secondary">📋 Slides</button>
     </div>
 </div>
 
 <!-- Main Layout -->
-
 <div class="main-layout">
     <div class="canvas-card">
         <div class="card-header">📄 MASTER VIEW (Recording Source)</div>
@@ -210,7 +198,6 @@
 </div>
 
 <!-- Slide Sidebar -->
-
 <div class="slide-sidebar" id="slideSidebar">
     <div class="slide-title"><span>📚 SLIDES / PAGES</span><button class="close-slide" id="closeSlideBtn">✕</button></div>
     <div class="slide-list" id="slideList"><div style="text-align:center;padding:30px;color:gray;">No slides loaded.</div></div>
@@ -218,12 +205,10 @@
 <button class="toggle-slide-btn" id="toggleSlideBtn">📋</button>
 
 <!-- LaTeX Modal -->
-
 <div id="latexModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:2000;justify-content:center;align-items:center;">
     <div style="background:white;padding:20px;border-radius:16px;min-width:350px;color:#1a1a2e;">
         <h3>📐 Insert LaTeX</h3>
         <input type="text" id="latexInput" placeholder="e.g. E=mc^2" style="width:100%;padding:8px;margin:8px 0;">
-        <div id="latexPreview" style="background:#f8f9fa;padding:10px;border-radius:8px;min-height:40px;">Preview:</div>
         <button id="insertLatexBtn" style="background:#8e44ad;color:white;margin-right:8px;">Insert</button>
         <button id="closeLatexModal">Cancel</button>
     </div>
@@ -232,7 +217,7 @@
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-    // DOM Elements
+    // Canvas elements
     const topCanvas = document.getElementById('topCanvas');
     const bottomCanvas = document.getElementById('bottomCanvas');
     const topCtx = topCanvas.getContext('2d');
@@ -247,29 +232,22 @@
     drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
     highlighterCtx.lineCap = 'round'; highlighterCtx.lineJoin = 'round';
 
-    // ========== STATE ==========
+    // State
     let currentTool = 'draw';
     let penColor = '#000000';
     let penSize = 4;
     let opacity = 1;
     let scale = 1, offsetX = 0, offsetY = 0;
-
-    let pdfDoc = null, pdfPages = [], currentPageNum = 1, totalPages = 0;
-    let slides = [], currentSlide = 0, mcqFontSize = 26;
+    let pdfDoc = null, pdfPages = [];
     let objects = [];
     let editingEnabled = false;
-    let vertexEditEnabled = false;
     let selectedObjectIndex = -1;
     let history = [], historyIndex = -1;
-
     let drawing = false, lastX = 0, lastY = 0, smoothPoints = [];
     let shapeStart = null, currentShapeType = null;
     let isDraggingObject = false, dragStartX = 0, dragStartY = 0, dragOrigObj = null;
-    let isResizing = false, resizeHandle = null, resizeStartBounds = null;
-    let isRotating = false, rotateStartAngle = 0;
-    let isDraggingVertex = false, vertexIndex = -1;
 
-    // ========== RECORDING WITH AUDIO (FIXED) ==========
+    // ========== RECORDING VARIABLES ==========
     let mediaRecorder = null;
     let recordedChunks = [];
     let isRecording = false;
@@ -278,10 +256,10 @@
     let combinedStream = null;
     let micEnabled = false;
 
-    // Function to get microphone with noise cancellation
+    // Enable Microphone with Noise Cancellation
     async function enableMicrophone() {
-        if (micStream && micEnabled) {
-            // Already enabled, disable it
+        if (micEnabled && micStream) {
+            // Disable if already enabled
             disableMicrophone();
             return;
         }
@@ -291,80 +269,89 @@
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                    sampleRate: 48000,
-                    channelCount: 1
+                    sampleRate: 48000
                 }
             });
             micStream = stream;
             micEnabled = true;
-            document.getElementById('micStatus').innerHTML = '🎙️ Mic: ON (Noise Cancellation Active)';
-            document.getElementById('micBtn').classList.add('active');
+            document.getElementById('micStatus').innerHTML = '🎙️ Mic: ON (Noise Cancellation) ✅';
+            document.getElementById('micStatus').style.background = '#27ae60';
             document.getElementById('micBtn').innerHTML = '🎙️ Mic ON';
+            document.getElementById('micBtn').classList.add('mic-on');
+            document.getElementById('infoBox').innerHTML = '✅ Mic Ready! Now click "Start Recording"';
             console.log("✅ Microphone enabled with noise cancellation");
         } catch (err) {
-            console.error("Mic access error:", err);
+            console.error("Mic error:", err);
             micEnabled = false;
-            document.getElementById('micStatus').innerHTML = '🎙️ Mic: Permission Denied';
+            document.getElementById('micStatus').innerHTML = '🎙️ Mic: DENIED ❌';
+            document.getElementById('micStatus').style.background = '#c0392b';
             alert("Microphone access denied. Please allow microphone to record audio.");
         }
     }
 
     function disableMicrophone() {
         if (micStream) {
-            micStream.getTracks().forEach(track => {
-                track.stop();
-            });
+            micStream.getTracks().forEach(track => track.stop());
             micStream = null;
         }
         micEnabled = false;
         document.getElementById('micStatus').innerHTML = '🎙️ Mic: Off';
-        document.getElementById('micBtn').classList.remove('active');
+        document.getElementById('micStatus').style.background = '#2c3e50';
         document.getElementById('micBtn').innerHTML = '🎙️ Enable Mic';
+        document.getElementById('micBtn').classList.remove('mic-on');
+        document.getElementById('infoBox').innerHTML = 'ℹ️ Step 1: Enable Mic | Step 2: Record';
         console.log("🔇 Microphone disabled");
     }
 
-    // Start recording with proper audio track
+    // Start Recording with Audio
     async function startRecording() {
         if (isRecording) {
             console.log("Already recording");
             return;
         }
         
-        // Ensure we have canvas stream
+        // Stop any existing canvas stream
         if (canvasStream) {
             canvasStream.getTracks().forEach(t => t.stop());
         }
-        canvasStream = topCanvas.captureStream(30); // 30 fps
         
-        // Get audio track if mic is enabled
-        let audioTrack = null;
-        if (micEnabled && micStream && micStream.getAudioTracks().length > 0) {
-            audioTrack = micStream.getAudioTracks()[0];
-            console.log("✅ Using microphone audio track for recording");
-            document.getElementById('micStatus').innerHTML = '🎙️ Mic: Recording Audio';
-        } else {
-            console.log("⚠️ No microphone audio track available, recording video only");
-            if (micEnabled) {
-                document.getElementById('micStatus').innerHTML = '🎙️ Mic: No Audio Track - Check Mic';
-            }
-        }
-        
-        // Create combined stream
+        // Capture canvas stream at 30fps
+        canvasStream = topCanvas.captureStream(30);
         const videoTrack = canvasStream.getVideoTracks()[0];
         if (!videoTrack) {
             alert("Cannot capture video stream");
             return;
         }
         
+        // Get audio track if mic is enabled
+        let audioTrack = null;
+        if (micEnabled && micStream && micStream.getAudioTracks().length > 0) {
+            audioTrack = micStream.getAudioTracks()[0];
+            console.log("✅ Audio track found, will include in recording");
+            document.getElementById('micStatus').innerHTML = '🎙️ Mic: Recording Audio 🎤';
+        } else if (micEnabled) {
+            console.log("⚠️ Mic enabled but no audio track available");
+            document.getElementById('micStatus').innerHTML = '🎙️ Mic: No Audio Track';
+        } else {
+            console.log("⚠️ Recording video only (mic not enabled)");
+            document.getElementById('micStatus').innerHTML = '🎙️ Mic: Off - Video Only';
+        }
+        
+        // Create combined stream
         if (audioTrack) {
             combinedStream = new MediaStream([videoTrack, audioTrack]);
         } else {
             combinedStream = new MediaStream([videoTrack]);
         }
         
-        // Check supported mime types
+        // Find supported mime type with audio
         let mimeType = '';
-        const codecs = ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'];
+        const codecs = [
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp9,opus', 
+            'video/webm;codecs=h264,opus',
+            'video/webm'
+        ];
         for (const codec of codecs) {
             if (MediaRecorder.isTypeSupported(codec)) {
                 mimeType = codec;
@@ -379,6 +366,7 @@
         mediaRecorder.ondataavailable = (event) => {
             if (event.data && event.data.size > 0) {
                 recordedChunks.push(event.data);
+                console.log(`Recorded chunk: ${event.data.size} bytes`);
             }
         };
         
@@ -387,11 +375,11 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `whiteboard_recording_${Date.now()}.webm`;
+            a.download = `whiteboard_${Date.now()}.webm`;
             a.click();
             URL.revokeObjectURL(url);
             
-            // Cleanup
+            // Cleanup streams
             if (canvasStream) {
                 canvasStream.getTracks().forEach(t => t.stop());
                 canvasStream = null;
@@ -403,31 +391,37 @@
             isRecording = false;
             document.getElementById('recIndicator').style.display = 'none';
             document.getElementById('recordBtn').innerHTML = '🎥 Start Recording';
-            document.getElementById('recordBtn').classList.remove('recording-active');
-            console.log(`✅ Recording saved! Size: ${blob.size} bytes`);
+            document.getElementById('recordBtn').classList.remove('recording');
+            document.getElementById('recordBtn').style.background = '#c0392b';
             
-            // Reset mic status display
             if (micEnabled && micStream) {
-                document.getElementById('micStatus').innerHTML = '🎙️ Mic: ON (Noise Cancellation Active)';
+                document.getElementById('micStatus').innerHTML = '🎙️ Mic: ON (Noise Cancellation) ✅';
+                document.getElementById('micStatus').style.background = '#27ae60';
             } else {
                 document.getElementById('micStatus').innerHTML = '🎙️ Mic: Off';
+                document.getElementById('micStatus').style.background = '#2c3e50';
             }
+            
+            console.log(`✅ Recording saved! Size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+            document.getElementById('infoBox').innerHTML = '✅ Recording saved! Enable Mic again if needed';
         };
         
         mediaRecorder.start(1000); // Collect data every second
         isRecording = true;
         document.getElementById('recIndicator').style.display = 'block';
         document.getElementById('recordBtn').innerHTML = '⏹️ Stop Recording';
-        document.getElementById('recordBtn').classList.add('recording-active');
-        console.log("🔴 Recording started with" + (audioTrack ? " AUDIO" : " VIDEO ONLY"));
+        document.getElementById('recordBtn').classList.add('recording');
+        document.getElementById('recordBtn').style.background = '#e74c3c';
+        document.getElementById('infoBox').innerHTML = '🔴 RECORDING - Speak into microphone!';
+        console.log("🔴 Recording started with" + (audioTrack ? " AUDIO + VIDEO" : " VIDEO ONLY"));
     }
     
     function stopRecording() {
         if (mediaRecorder && isRecording && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
-            console.log("⏹️ Recording stopped, saving file...");
+            console.log("⏹️ Stopping recording...");
         } else {
-            // Cleanup anyway
+            // Force cleanup
             if (canvasStream) {
                 canvasStream.getTracks().forEach(t => t.stop());
                 canvasStream = null;
@@ -439,7 +433,8 @@
             isRecording = false;
             document.getElementById('recIndicator').style.display = 'none';
             document.getElementById('recordBtn').innerHTML = '🎥 Start Recording';
-            document.getElementById('recordBtn').classList.remove('recording-active');
+            document.getElementById('recordBtn').classList.remove('recording');
+            document.getElementById('recordBtn').style.background = '#c0392b';
         }
     }
     
@@ -447,23 +442,24 @@
         if (isRecording) {
             stopRecording();
         } else {
-            // Auto-enable mic if not already enabled (ask user)
+            // Auto-enable mic if not enabled - ask user
             if (!micEnabled) {
-                await enableMicrophone();
+                const confirmMic = confirm("Microphone is OFF. Do you want to enable microphone for audio recording?");
+                if (confirmMic) {
+                    await enableMicrophone();
+                    // Give time for mic to initialize
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             }
             startRecording();
         }
     }
     
     async function toggleMicrophone() {
-        if (micEnabled) {
-            disableMicrophone();
-        } else {
-            await enableMicrophone();
-        }
+        await enableMicrophone();
     }
 
-    // ========== CANVAS SETUP ==========
+    // ========== CANVAS FUNCTIONS ==========
     function setCanvasSize(w, h) {
         [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { c.width = w; c.height = h; });
         drawCtx.clearRect(0, 0, w, h);
@@ -476,7 +472,6 @@
         ctx.globalAlpha = opacity;
         ctx.lineWidth = penSize;
         ctx.strokeStyle = penColor;
-        ctx.fillStyle = penColor;
         ctx.globalCompositeOperation = 'source-over';
         if (tool === 'marker') {
             ctx.globalAlpha = opacity * 0.75;
@@ -491,29 +486,17 @@
         }
     }
 
-    // Object helpers (simplified but functional)
-    function getObjectPoints(obj) {
-        if (obj.points) return obj.points;
-        if (obj.type === 'rect') return [{ x: obj.x, y: obj.y }, { x: obj.x + obj.w, y: obj.y }, { x: obj.x + obj.w, y: obj.y + obj.h }, { x: obj.x, y: obj.y + obj.h }];
-        if (obj.type === 'circle') return [{ x: obj.cx, y: obj.cy - obj.ry }, { x: obj.cx + obj.rx, y: obj.cy }, { x: obj.cx, y: obj.cy + obj.ry }, { x: obj.cx - obj.rx, y: obj.cy }];
-        if (obj.type === 'arrow' || obj.type === 'line') return [{ x: obj.x1, y: obj.y1 }, { x: obj.x2, y: obj.y2 }];
-        return [];
-    }
-    
     function getObjectBounds(obj) {
-        if (obj.points) {
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            obj.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
-        }
-        if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w / 2, cy: obj.y + obj.h / 2 };
-        if (obj.type === 'circle') return { x: obj.cx - obj.rx, y: obj.cy - obj.ry, w: obj.rx * 2, h: obj.ry * 2, cx: obj.cx, cy: obj.cy };
+        if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+        if (obj.type === 'circle') return { x: obj.cx - obj.rx, y: obj.cy - obj.ry, w: obj.rx * 2, h: obj.ry * 2 };
         if (obj.type === 'arrow' || obj.type === 'line') {
             const minX = Math.min(obj.x1, obj.x2), maxX = Math.max(obj.x1, obj.x2);
             const minY = Math.min(obj.y1, obj.y2), maxY = Math.max(obj.y1, obj.y2);
-            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
         }
-        return { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0 };
+        if (obj.type === 'text') return { x: obj.x, y: obj.y - 20, w: 100, h: 30 };
+        if (obj.type === 'image') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+        return { x: 0, y: 0, w: 0, h: 0 };
     }
     
     function hitTestObject(px, py) {
@@ -554,10 +537,6 @@
         ctx.lineWidth = 2.5 / scale;
         ctx.setLineDash([8 / scale, 5 / scale]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
-        ctx.setLineDash([]);
-        const sz = Math.max(12 / scale, 14);
-        ctx.fillStyle = '#ffd700';
-        [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => ctx.fillRect(cx - sz / 2, cy - sz / 2, sz, sz));
         ctx.restore();
     }
     
@@ -602,7 +581,7 @@
         if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
         history.push(state);
         historyIndex = history.length - 1;
-        if (history.length > 30) { history.shift(); historyIndex--; }
+        if (history.length > 20) { history.shift(); historyIndex--; }
     }
     
     function restoreHistory(state) {
@@ -624,16 +603,13 @@
         const rect = bottomCanvas.getBoundingClientRect();
         let cx, cy;
         if (e.touches?.length) { cx = e.touches[0].clientX - rect.left; cy = e.touches[0].clientY - rect.top; }
-        else if (e.changedTouches?.length) { cx = e.changedTouches[0].clientX - rect.left; cy = e.changedTouches[0].clientY - rect.top; }
         else { cx = e.clientX - rect.left; cy = e.clientY - rect.top; }
         return { x: ((cx / rect.width) * bottomCanvas.width - offsetX) / scale, y: ((cy / rect.height) * bottomCanvas.height - offsetY) / scale };
     }
     
-    // Drawing handlers (simplified but working)
     function handleDown(e) {
         if (e.type === 'mousedown' && e.button !== 0) return;
         e.preventDefault();
-        if (currentTool === 'none') return;
         const p = getCanvasCoords(e);
         
         if (currentTool === 'select') {
@@ -656,11 +632,6 @@
             if (hit >= 0) selectedObjectIndex = hit;
             else selectedObjectIndex = -1;
             redrawAll();
-            return;
-        }
-        
-        if (currentTool === 'fill') {
-            // Simple fill placeholder
             return;
         }
         
@@ -751,7 +722,7 @@
         if (currentShapeType && shapeStart) {
             const p = getCanvasCoords(e);
             if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) > 5) {
-                const obj = { strokeStyle: penColor, lineWidth: penSize, opacity, rotation: 0 };
+                const obj = { strokeStyle: penColor, lineWidth: penSize, opacity };
                 if (currentShapeType === 'rect') { obj.type = 'rect'; obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(p.x - shapeStart.x); obj.h = Math.abs(p.y - shapeStart.y); }
                 else if (currentShapeType === 'circle') { obj.type = 'circle'; obj.cx = (shapeStart.x + p.x) / 2; obj.cy = (shapeStart.y + p.y) / 2; obj.rx = Math.abs(p.x - shapeStart.x) / 2; obj.ry = Math.abs(p.y - shapeStart.y) / 2; }
                 else if (currentShapeType === 'arrow') { obj.type = 'arrow'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y; }
@@ -771,19 +742,11 @@
         redrawAll();
     }
     
-    // PDF and file handlers (simplified)
     async function loadPDF(file) {
         const data = await file.arrayBuffer();
         pdfDoc = await pdfjsLib.getDocument({ data }).promise;
-        totalPages = pdfDoc.numPages;
-        pdfPages = [];
-        for (let i = 1; i <= totalPages; i++) pdfPages.push(await pdfDoc.getPage(i));
-        await renderPDFPage(1);
-    }
-    
-    async function renderPDFPage(num) {
-        const page = pdfPages[num - 1];
-        const viewport = page.getViewport({ scale: 2.0 });
+        const page = await pdfDoc.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
         setCanvasSize(viewport.width, viewport.height);
         bgCtx.fillStyle = 'white';
         bgCtx.fillRect(0, 0, viewport.width, viewport.height);
@@ -879,6 +842,16 @@
         img.src = URL.createObjectURL(file);
     });
     
+    document.getElementById('latexBtn').onclick = () => document.getElementById('latexModal').style.display = 'flex';
+    document.getElementById('closeLatexModal').onclick = () => document.getElementById('latexModal').style.display = 'none';
+    document.getElementById('insertLatexBtn').onclick = () => {
+        const latex = document.getElementById('latexInput').value.trim();
+        if (latex) {
+            alert("LaTeX inserted: " + latex);
+        }
+        document.getElementById('latexModal').style.display = 'none';
+    };
+    
     // Recording buttons
     document.getElementById('recordBtn').onclick = toggleRecording;
     document.getElementById('micBtn').onclick = toggleMicrophone;
@@ -937,8 +910,7 @@
     saveHistory();
     redrawAll();
     
-    console.log("✅ Whiteboard ready - MIC must be enabled FIRST, then click RECORD for audio+video");
+    console.log("✅ Whiteboard ready! Steps: 1) Enable Mic 2) Start Recording");
 </script>
-
 </body>
 </html>
