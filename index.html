@@ -68,6 +68,16 @@
       border-color: #f87171;
       color: white;
     }
+    .tool-btn.recording {
+      background: #dc2626;
+      border-color: #f87171;
+      color: white;
+      animation: pulse-rec 1.2s infinite;
+    }
+    @keyframes pulse-rec {
+      0%, 100% { box-shadow: 0 0 8px rgba(220,38,38,0.5); }
+      50% { box-shadow: 0 0 24px rgba(220,38,38,0.9); }
+    }
     .tool-btn:hover { background: #334155; }
     input[type="color"] { width: 28px; height: 28px; border-radius: 20px; cursor: pointer; border: 2px solid white; }
     input[type="range"] { width: 60px; accent-color: var(--accent); }
@@ -232,8 +242,8 @@
     <button class="tool-btn" id="btn-image">🖼 Image</button>
     <button class="tool-btn" id="btn-latex">📐 LaTeX</button>
     <div class="sep"></div>
-    <button class="tool-btn" id="btn-record">🎤 Rec</button>
-    <span style="color:#94a3b8; font-size:11px;" id="recStatus">Off</span>
+    <button class="tool-btn" id="btn-record">🎤 Record</button>
+    <span style="color:#94a3b8; font-size:11px; min-width:40px;" id="recStatus">Off</span>
     <button class="tool-btn" id="btn-pdf-upload">📄 PDF</button>
     <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
   </div>
@@ -274,13 +284,15 @@
       const topWrapper = document.getElementById('topWrapper');
       const bottomWrapper = document.getElementById('bottomWrapper');
       const viewportIndicator = document.getElementById('viewport-indicator');
+      const btnRecord = document.getElementById('btn-record');
+      const recStatus = document.getElementById('rec-status');
 
-      // SHARED DIMENSIONS — both canvases use these exact same values
+      // SHARED DIMENSIONS
       const WORLD_W = 1280;
-      const WORLD_H = 720;  // 16:9
-      let displayW, displayH; // pixel dimensions both canvases get
+      const WORLD_H = 720;
+      let displayW, displayH;
 
-      // View transform for bottom canvas
+      // View transform
       let zoom = 2.0;
       let panX = 0, panY = 0;
       let isPanning = false;
@@ -311,29 +323,29 @@
       let editItemStart = null;
       let editHandle = null;
 
+      // PDF
       let pdfDoc = null;
       let pdfPages = [];
       let currentPdfPage = 0;
       let pdfBgImage = null;
 
+      // RECORDING — MANUAL ONLY (start/stop via button click)
       let mediaRecorder = null;
-      let audioChunks = [];
+      let recordedChunks = [];
       let isRecording = false;
       let audioStream = null;
+      let canvasStream = null;
 
       let ignorePointer = false;
 
       // ──────────────────────────────────────
-      // RESIZE — both canvases get identical dimensions
+      // RESIZE
       // ──────────────────────────────────────
       function resizeCanvases() {
         const topRect = topWrapper.getBoundingClientRect();
         const bottomRect = bottomWrapper.getBoundingClientRect();
-        
-        // Choose the maximum size that fits both containers while maintaining 16:9
         const maxW = Math.min(topRect.width, bottomRect.width);
         const maxH = Math.min(topRect.height, bottomRect.height);
-        
         if (maxW / maxH > WORLD_W / WORLD_H) {
           displayH = maxH;
           displayW = displayH * (WORLD_W / WORLD_H);
@@ -341,8 +353,6 @@
           displayW = maxW;
           displayH = displayW / (WORLD_W / WORLD_H);
         }
-        
-        // BOTH canvases get the SAME pixel dimensions
         topCanvas.width = WORLD_W;
         topCanvas.height = WORLD_H;
         topCanvas.style.width = displayW + 'px';
@@ -631,7 +641,6 @@
             size: currentTool === 'eraser' ? 20 : penSize
           };
           strokes.push(currentStroke);
-          startVoice();
           renderAll();
         } else if (currentTool === 'strokeEraser') {
           const hitIdx = strokes.findIndex(s => s.type !== 'eraser' && pointNearStroke(coords, s, 15));
@@ -665,7 +674,7 @@
       function onPointerUp(e) {
         if (ignorePointer) return;
         if (isPanning) { isPanning = false; bottomCanvas.style.cursor = currentTool==='pan'?'grab':(editMode?'default':'crosshair'); return; }
-        if (isDrawing) { isDrawing = false; currentStroke = null; stopVoice(); renderAll(); }
+        if (isDrawing) { isDrawing = false; currentStroke = null; renderAll(); }
         if (window._drawingShape) {
           if (window._drawingShape.w < 5 || window._drawingShape.h < 5) shapes.pop();
           window._drawingShape = null; renderAll();
@@ -875,27 +884,78 @@
         document.getElementById('latex-modal').classList.remove('show');
       };
 
-      async function startVoice() {
-        if(isRecording)return;
-        try{audioStream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e){audioStream=null;}
-        const canvasStream=topCanvas.captureStream(30);
-        const tracks=[...canvasStream.getVideoTracks()];
-        if(audioStream)tracks.push(...audioStream.getAudioTracks());
-        mediaRecorder=new MediaRecorder(new MediaStream(tracks),{mimeType:'video/webm'});
-        audioChunks=[];
-        mediaRecorder.ondataavailable=e=>{if(e.data.size>0)audioChunks.push(e.data);};
-        mediaRecorder.onstop=()=>{
-          const blob=new Blob(audioChunks,{type:'video/webm'});
-          const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='whiteboard.webm';a.click();
-          toast('Recording saved!');
+      // ──────────────────────────────────────
+      // RECORDING — ONLY via Record button click
+      // ──────────────────────────────────────
+      async function startRecording() {
+        if (isRecording) return;
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+        } catch (e) {
+          audioStream = null;
+        }
+        // Capture top canvas as video stream
+        canvasStream = topCanvas.captureStream(30);
+        const tracks = [...canvasStream.getVideoTracks()];
+        if (audioStream) {
+          tracks.push(...audioStream.getAudioTracks());
+        }
+        const combinedStream = new MediaStream(tracks);
+        mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
         };
-        mediaRecorder.start();isRecording=true;document.getElementById('recStatus').textContent='🔴 Rec';
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'whiteboard-recording-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.webm';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          toast('✅ Recording saved!');
+          // Cleanup
+          if (audioStream) {
+            audioStream.getTracks().forEach(t => t.stop());
+            audioStream = null;
+          }
+          canvasStream = null;
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        btnRecord.classList.add('recording');
+        btnRecord.textContent = '⏹ Stop';
+        recStatus.textContent = '🔴 Recording...';
+        recStatus.style.color = '#ef4444';
+        toast('🔴 Recording started — click Stop when done');
       }
-      function stopVoice() {
-        if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();if(audioStream)audioStream.getTracks().forEach(t=>t.stop());isRecording=false;document.getElementById('recStatus').textContent='Off';}
-      }
-      document.getElementById('btn-record').onclick=()=>{if(isRecording)stopVoice();else startVoice();};
 
+      function stopRecording() {
+        if (!isRecording || !mediaRecorder || mediaRecorder.state !== 'recording') return;
+        mediaRecorder.stop();
+        isRecording = false;
+        btnRecord.classList.remove('recording');
+        btnRecord.textContent = '🎤 Record';
+        recStatus.textContent = 'Off';
+        recStatus.style.color = '#94a3b8';
+      }
+
+      function toggleRecording() {
+        if (isRecording) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      }
+
+      btnRecord.addEventListener('click', toggleRecording);
+
+      // ──────────────────────────────────────
+      // PDF
+      // ──────────────────────────────────────
       document.getElementById('btn-pdf-upload').onclick=()=>document.getElementById('pdfFileInput').click();
       document.getElementById('pdfFileInput').onchange=async(e)=>{
         const file=e.target.files[0];if(!file)return;
@@ -931,19 +991,21 @@
       }
       function switchPdfPage(idx){if(idx!==currentPdfPage){currentPdfPage=idx;renderPdfPage(idx);}}
 
+      // Keyboard
       window.addEventListener('keydown',(e)=>{
         if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT')return;
         if(e.ctrlKey&&e.key==='z'){e.preventDefault();undo();}
         if(e.ctrlKey&&e.key==='y'){e.preventDefault();redo();}
         if(e.key==='p')setTool('pen');if(e.key==='e')setTool('eraser');
         if(e.key===' '){e.preventDefault();setTool('pan');}
+        if(e.key==='r'&&!e.ctrlKey){e.preventDefault();toggleRecording();}
       });
 
-      function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);}
+      function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
       pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       setTool('pen');
-      toast('✒️ Both canvases identical • Pinch zoom fixed • Write freely');
+      toast('✒️ Ready • Press R or click 🎤 to start/stop recording');
     })();
   </script>
 </body>
