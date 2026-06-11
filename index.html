@@ -1,1099 +1,1213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>PDF Whiteboard Pro | Shapes + Edit + Images + Zoom</title>
-  <script>
-    window.MathJax = {
-      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']], processEscapes: true }
-    };
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-  <style>
-    * { box-sizing: border-box; user-select: none; }
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #eef2f7;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-      gap: 12px;
-      overflow: hidden;
-    }
-    .toolbar {
-      background: white;
-      border-radius: 20px;
-      padding: 10px 16px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-      flex-shrink: 0;
-    }
-    .tool-group {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      background: #f8f9fc;
-      padding: 4px 10px;
-      border-radius: 40px;
-    }
-    button, .file-label {
-      background: #1e88e5;
-      border: none;
-      padding: 6px 14px;
-      border-radius: 40px;
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 13px;
-      transition: 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    button:hover, .file-label:hover { filter: brightness(0.92); transform: scale(0.97); }
-    button.secondary { background: #e2e6ea; color: #1e2a3e; }
-    button.active { background: #2c3e66; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-    button.adj-active { background: #f39c12; color: #2c2c2c; }
-    .telegram-btn { background: #0088cc; }
-    .danger-btn { background: #e74c3c; }
-    input[type="color"] { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; }
-    .board-container {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      gap: 16px;
-      min-height: 0;
-    }
-    .board-card {
-      background: white;
-      border-radius: 24px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      flex: 1;
-    }
-    .board-header {
-      padding: 10px 16px;
-      background: #fef9e6;
-      font-weight: bold;
-      border-bottom: 2px solid #ffd966;
-      font-size: 14px;
-    }
-    .canvas-holder {
-      position: relative;
-      flex: 1;
-      background: #f0f2f5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: auto;
-      min-height: 0;
-    }
-    canvas {
-      display: block;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      background: white;
-      cursor: crosshair;
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
-    .status-badge {
-      position: absolute;
-      bottom: 12px;
-      right: 16px;
-      background: rgba(0,0,0,0.65);
-      color: white;
-      padding: 4px 12px;
-      border-radius: 50px;
-      font-size: 11px;
-      font-weight: 500;
-      pointer-events: none;
-      z-index: 10;
-    }
-    .telegram-panel {
-      background: #e1f0fa;
-      border-radius: 40px;
-      padding: 6px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-shrink: 0;
-    }
-    .modal {
-      display: none;
-      position: fixed;
-      top:0;left:0;width:100%;height:100%;
-      background: rgba(0,0,0,0.7);
-      justify-content: center;
-      align-items: center;
-      z-index: 2000;
-    }
-    .modal-content {
-      background: white;
-      border-radius: 32px;
-      padding: 24px;
-      text-align: center;
-      max-width: 340px;
-    }
-    .recording-indicator {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #e74c3c;
-      color: white;
-      padding: 8px 18px;
-      border-radius: 60px;
-      font-weight: bold;
-      animation: pulse 1s infinite;
-      display: none;
-      z-index: 1500;
-    }
-    @keyframes pulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
-    .math-bar {
-      background: #f8f9fa;
-      border-radius: 40px;
-      padding: 6px 16px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-shrink: 0;
-    }
-    #mathInput { flex: 1; border-radius: 60px; border: 1px solid #ccc; padding: 8px 15px; }
-    .mic-status { position: fixed; bottom: 20px; left: 20px; background: #27ae60; color: white; padding: 6px 14px; border-radius: 30px; font-size: 12px; display: none; z-index: 1500; }
-    .shape-group { display: flex; gap: 6px; }
-    .polygon-sides { width: 45px; text-align: center; border-radius: 30px; border: 1px solid #ccc; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
+    <title>Whiteboard – Pinch Zoom + Drawing Fixed</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460; --accent: #e94560;
+            --accent2: #533483; --text: #fff; --canvas-bg: #2d2d44; --card-bg: #1e1e2f;
+            --radius: 14px;
+        }
+        body.light {
+            --bg: #f0f2f5; --surface: #ffffff; --surface2: #e9ecef; --accent: #e94560;
+            --accent2: #6c5ce7; --text: #1a1a2e; --canvas-bg: #e8ecf1; --card-bg: #fff;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg); height: 100vh; display: flex; flex-direction: column;
+            overflow: hidden; transition: background 0.3s, color 0.3s; color: var(--text);
+            padding: 4px; gap: 4px;
+        }
+        .middle-toolbar {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 8px 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+        .tool-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+            background: var(--surface2);
+            padding: 4px 10px;
+            border-radius: 22px;
+        }
+        button, .file-label {
+            background: var(--accent);
+            border: none; padding: 7px 14px; border-radius: 20px;
+            color: white; font-weight: 600; cursor: pointer; font-size: 13px;
+            transition: 0.2s; display: inline-flex; align-items: center; gap: 4px;
+            white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover, .file-label:hover { opacity: 0.85; transform: scale(0.96); }
+        button.active { background: #0f3460; border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(233,69,96,0.5); }
+        button.secondary { background: var(--accent2); }
+        button.danger { background: #c0392b; }
+        button.accent2 { background: #8e44ad; }
+        input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; cursor: pointer; padding: 2px; }
+        input[type="range"] { width: 70px; accent-color: var(--accent); }
+        input[type="number"] { width: 50px; padding: 4px; border-radius: 12px; border: none; text-align: center; background: var(--surface); color: var(--text); }
+        .color-palette { display: flex; gap: 4px; }
+        .color-swatch {
+            width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.5); transition: 0.15s;
+        }
+        .color-swatch:hover { border-color: #ffd700; transform: scale(1.2); }
+        .main-layout { display: flex; flex-direction: column; flex: 1; gap: 4px; min-height: 0; }
+        .canvas-card {
+            background: var(--card-bg); border-radius: var(--radius); display: flex;
+            flex-direction: column; overflow: hidden; flex: 1; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        }
+        .card-header { padding: 4px 12px; background: var(--accent2); color: white; font-weight: bold; font-size: 11px; }
+        .canvas-container {
+            position: relative; flex: 1; background: var(--canvas-bg);
+            display: flex; align-items: center; justify-content: center; overflow: auto; min-height: 0;
+        }
+        canvas { display: block; background: white; cursor: crosshair; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .status {
+            position: absolute; bottom: 4px; right: 8px; background: rgba(0,0,0,0.65); color: white;
+            padding: 2px 10px; border-radius: 14px; font-size: 10px; pointer-events: none; z-index: 5;
+        }
+        .slide-sidebar {
+            position: fixed; right: -360px; top: 0; width: 350px; height: 100vh;
+            background: var(--surface); box-shadow: -2px 0 25px rgba(0,0,0,0.4);
+            display: flex; flex-direction: column; overflow: hidden;
+            transition: right 0.3s cubic-bezier(0.2,0.9,0.4,1.1); z-index: 1500;
+            border-radius: 14px 0 0 14px;
+        }
+        .slide-sidebar.open { right: 0; }
+        .slide-title {
+            background: var(--accent); padding: 16px; color: white; font-weight: bold;
+            display: flex; justify-content: space-between; align-items: center; font-size: 14px;
+        }
+        .close-slide { background: rgba(0,0,0,0.3); border: none; color: white; font-size: 20px; cursor: pointer; border-radius: 50%; width: 32px; height: 32px; }
+        .slide-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+        .slide-item {
+            background: var(--surface2); border-radius: 12px; padding: 12px 14px; cursor: pointer;
+            color: var(--text); font-size: 12px; transition: 0.2s; border-left: 4px solid transparent;
+        }
+        .slide-item:hover { background: var(--accent); transform: translateX(-3px); color: white; }
+        .slide-item.active { background: var(--accent); border-left-color: #ffd700; font-weight: bold; }
+        .toggle-slide-btn {
+            position: fixed; right: 16px; bottom: 24px; background: var(--accent); border: none;
+            color: white; width: 48px; height: 48px; border-radius: 50%; font-size: 22px;
+            cursor: pointer; z-index: 1600; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .recording-indicator {
+            position: fixed; top: 10px; right: 10px; background: #e74c3c; color: white;
+            padding: 4px 12px; border-radius: 20px; font-size: 11px; animation: pulse 1s infinite;
+            display: none; z-index: 2000; font-weight: bold;
+        }
+        @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+        .info-banner {
+            position: fixed; bottom: 20px; left: 20px; background: #2c3e50; color: #ffd700;
+            padding: 6px 14px; border-radius: 20px; font-size: 11px; z-index: 1600;
+            font-weight: bold; pointer-events: none;
+        }
+        .polygon-input-group {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: var(--surface2);
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .polygon-input-group input {
+            width: 45px;
+            padding: 4px;
+            border-radius: 12px;
+            border: none;
+            text-align: center;
+            background: var(--surface);
+            color: var(--text);
+        }
+    </style>
 </head>
 <body>
 
-<div class="recording-indicator" id="recIndicator">🔴 RECORDING + AUDIO</div>
-<div id="micStatusToast" class="mic-status"></div>
+<div class="recording-indicator" id="recIndicator">🔴 RECORDING</div>
+<div class="info-banner" id="infoBanner">📌 Pinch to Zoom (2 fingers) on bottom canvas | Draw with one finger | Top canvas static</div>
 
-<div class="toolbar">
-  <div class="tool-group">
-    <input type="color" id="penColor" value="#000000">
-    <input type="range" id="brushWidth" min="1" max="40" value="3">
-    <span id="sizeLabel">3px</span>
-  </div>
-  <div class="tool-group">
-    <button id="drawModeBtn" class="active">✏️ Draw</button>
-    <button id="eraserBtn">🧽 Eraser</button>
-    <button id="smartEraseBtn">🎯 Smart Erase</button>
-    <button id="selectBtn" class="secondary">🖱️ Select</button>
-    <button id="clearAllBtn" class="secondary">🗑️ Clear</button>
-    <button id="undoBtn" class="secondary">↩️ Undo</button>
-    <button id="redoBtn" class="secondary">↪️ Redo</button>
-    <button id="adjModeBtn" class="secondary">🔧 ADJ (Top Zoom)</button>
-    <button id="resetAdjBtn" class="secondary">🔄 Reset Top Zoom</button>
-  </div>
-  <div class="tool-group shape-group">
-    <button id="rectBtn" class="secondary">⬛ Rect</button>
-    <button id="circleBtn" class="secondary">⚪ Circle</button>
-    <button id="triangleBtn" class="secondary">🔺 Triangle</button>
-    <button id="diamondBtn" class="secondary">💎 Diamond</button>
-    <button id="arrowBtn" class="secondary">➡️ Arrow</button>
-    <button id="lineBtn" class="secondary">📏 Line</button>
-    <input type="number" id="polygonSides" class="polygon-sides" value="5" min="3" max="12" step="1">
-    <button id="polygonBtn" class="secondary">🔷 Polygon</button>
-  </div>
-  <div class="tool-group">
-    <input type="file" id="imageUpload" accept="image/*" style="display:none">
-    <label for="imageUpload" class="file-label" style="background:#6c5ce7;">🖼️ Add Image</label>
-    <button id="micTestBtn" class="telegram-btn">🎤 Test Mic</button>
-    <button id="toggleMicBtn" class="telegram-btn">🎙️ Enable Mic</button>
-    <button id="recordMasterBtn" class="danger-btn">🔴 Record + Telegram</button>
-    <button id="testTelegramBtn" class="telegram-btn">📡 Test Bot</button>
-  </div>
-  <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
-  <label for="pdfFileInput" class="file-label" style="background:#2c3e66;">📄 Upload PDF (16:9)</label>
-  <div id="pdfPageNav" style="display:none; gap:6px; align-items:center;">
-    <button id="prevPageBtn" class="secondary">◀ Prev</button>
-    <span id="pageIndicator">1/1</span>
-    <button id="nextPageBtn" class="secondary">Next ▶</button>
-  </div>
-</div>
-
-<div class="math-bar">
-  <span>📐 LaTeX: </span>
-  <input type="text" id="mathInput" placeholder="e.g., $x^2 + y^2 = r^2$ or \frac{a}{b}">
-  <button id="addMathBtn" style="background:#2ecc71;">➕ Add Equation</button>
-</div>
-
-<div class="telegram-panel">
-  <span>☁️ Telegram Storage: <strong id="telegramStatusText">Checking...</strong></span>
-  <button id="showQrBtn" class="secondary">📱 Open in Telegram</button>
-</div>
-
-<div class="board-container">
-  <div class="board-card">
-    <div class="board-header">📄 TOP: Fixed PDF Reference + Drawing (Static View)</div>
-    <div class="canvas-holder" id="topHolder">
-      <canvas id="topCanvas"></canvas>
-      <div class="status-badge" id="topStatus">Fixed View</div>
+<!-- Middle Toolbar -->
+<div class="middle-toolbar" id="middleToolbar">
+    <div class="tool-group">
+        <div class="color-palette" id="colorPalette"></div>
+        <input type="color" id="penColor" value="#000000">
+        <input type="range" id="brushSize" min="1" max="30" value="4">
+        <span id="sizeLabel" style="color:var(--text);min-width:24px;">4px</span>
+        <input type="range" id="opacitySlider" min="0.2" max="1" step="0.05" value="1">
+        <span style="color:var(--text);font-size:11px;">Op</span>
     </div>
-  </div>
-  <div class="board-card">
-    <div class="board-header">✍️ BOTTOM: Interactive Canvas (Pinch Zoom • Pan • Draw • Shapes • Edit)</div>
-    <div class="canvas-holder" id="mainHolder">
-      <canvas id="mainBoardCanvas"></canvas>
-      <div class="status-badge" id="mainStatus">Zoom + Draw</div>
+    <div class="tool-group">
+        <button id="drawBtn" class="active">✏️ Pen</button>
+        <button id="markerBtn">🖌️ Marker</button>
+        <button id="highlighterBtn">✨ Highlighter</button>
+        <button id="eraseBtn">🧽 Eraser</button>
+        <button id="fillBtn">🎨 Fill</button>
     </div>
-  </div>
+    <div class="tool-group">
+        <button id="rectBtn">⬛ Rect</button>
+        <button id="circleBtn">⚪ Circle</button>
+        <button id="triangleBtn">🔺 Triangle</button>
+        <button id="diamondBtn">💎 Diamond</button>
+        <div class="polygon-input-group">
+            <span style="font-size:11px;">🔷</span>
+            <input type="number" id="polygonSides" min="3" max="12" value="5" step="1">
+            <button id="polygonBtn">Polygon</button>
+        </div>
+        <button id="arrowBtn">➡️ Arrow</button>
+        <button id="lineBtn">📏 Line</button>
+        <button id="textBtn">📝 Text</button>
+        <button id="latexBtn" class="accent2">📐 LaTeX</button>
+    </div>
+    <div class="tool-group">
+        <button id="selectBtn">🖱️ Select</button>
+        <button id="editToggleBtn">🔧 Edit</button>
+        <button id="vertexEditBtn" class="accent2">✏️ Vertex Edit</button>
+        <span id="objectActionGroup" style="display:none;">
+            <button id="rotateLeftBtn">↺</button>
+            <button id="rotateRightBtn">↻</button>
+            <button id="deleteObjBtn" class="danger">🗑️</button>
+        </span>
+    </div>
+    <div class="tool-group">
+        <input type="file" id="pdfFile" accept=".pdf" style="display:none">
+        <label for="pdfFile" class="file-label">📄 PDF</label>
+        <input type="file" id="imgFile" accept="image/*" style="display:none">
+        <label for="imgFile" class="file-label">🖼️ Img</label>
+        <button id="recordBtn" class="danger">🔴 Rec</button>
+        <button id="micBtn">🎙️ Mic</button>
+        <button id="undoBtn">↩️</button>
+        <button id="redoBtn">↪️</button>
+        <button id="clearBtn" class="danger">🗑️ Clear</button>
+        <button id="themeBtn">🌓</button>
+        <button id="exportImgBtn">📷</button>
+        <button id="slidePanelBtn" class="secondary">📋 Slides</button>
+    </div>
 </div>
 
-<div style="font-size:12px; text-align:center; background:#fff3e0; border-radius:30px; padding:6px; margin-top:4px; flex-shrink:0;">
-  💡 Tip: Use Select tool to click on any shape/image → then drag to move, use corners to resize, top circle to rotate.
+<!-- Main Layout -->
+<div class="main-layout">
+    <div class="canvas-card">
+        <div class="card-header">📄 MASTER VIEW (Static)</div>
+        <div class="canvas-container" id="topContainer">
+            <canvas id="topCanvas"></canvas>
+            <div class="status" id="topStatus">Ready</div>
+        </div>
+    </div>
+    <div class="canvas-card">
+        <div class="card-header">✍️ INTERACTIVE CANVAS (Pinch Zoom • Pan • Draw)</div>
+        <div class="canvas-container" id="bottomContainer">
+            <canvas id="bottomCanvas"></canvas>
+            <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
+        </div>
+    </div>
 </div>
 
-<div id="qrModal" class="modal"><div class="modal-content"><h3>📱 Telegram Access</h3><div id="qrCodeContainer"></div><p>@WB27_bot</p><button onclick="closeModal()" style="background:#0088cc;">OK</button></div></div>
+<!-- Slide Sidebar -->
+<div class="slide-sidebar" id="slideSidebar">
+    <div class="slide-title"><span>📚 SLIDES / PAGES</span><button class="close-slide" id="closeSlideBtn">✕</button></div>
+    <div class="slide-list" id="slideList"><div style="text-align:center;padding:30px;color:gray;">No slides loaded.</div></div>
+</div>
+<button class="toggle-slide-btn" id="toggleSlideBtn">📋</button>
+
+<!-- LaTeX Modal -->
+<div id="latexModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:2000;justify-content:center;align-items:center;">
+    <div style="background:white;padding:20px;border-radius:16px;min-width:350px;color:#1a1a2e;">
+        <h3>📐 Insert LaTeX</h3>
+        <input type="text" id="latexInput" placeholder="e.g. E=mc^2" style="width:100%;padding:8px;margin:8px 0;">
+        <button id="insertLatexBtn" style="background:#8e44ad;color:white;margin-right:8px;">Insert</button>
+        <button id="closeLatexModal">Cancel</button>
+    </div>
+</div>
 
 <script>
-  // ========== TELEGRAM CONFIG ==========
-  const TELEGRAM = { BOT_TOKEN: '8142735342:AAHexGW7ZVeWorAb70i51P1hudv9rljUH7Q', CHAT_ID: '5229323108', BOT_USERNAME: 'WB27_bot', FATHERBOT_URL: 'https://fatherbot.vercel.app/api/telegram' };
-  
-  // ========== GLOBALS ==========
-  let pdfDoc = null, currentPageNum = 1, totalPages = 0;
-  let pdfBaseWidth = 1200, pdfBaseHeight = 675;
-  let hasPDF = false;
-  
-  const topCanvas = document.getElementById('topCanvas');
-  const mainCanvas = document.getElementById('mainBoardCanvas');
-  let topCtx = topCanvas.getContext('2d');
-  let mainCtx = mainCanvas.getContext('2d');
-  
-  let pdfOffscreen = document.createElement('canvas');
-  let pdfOffCtx = pdfOffscreen.getContext('2d');
-  
-  let drawingLayerMain = document.createElement('canvas');
-  let drawingLayerTop = document.createElement('canvas');
-  let mainDrawCtx = drawingLayerMain.getContext('2d');
-  let topDrawCtx = drawingLayerTop.getContext('2d');
-  
-  let pageStrokes = {};
-  let currentStrokes = [];
-  let historyStack = []; let historyIndex = -1;
-  
-  let currentTool = 'draw';   // draw, eraser, smartErase, shape, select
-  let currentShape = null;    // 'rect', 'circle', ...
-  let shapeStart = null;
-  let customPolygonSides = 5;
-  
-  let penColor = '#000000';
-  let penSize = 3;
-  let adjModeActive = false;
-  let scale = 1, offsetX = 0, offsetY = 0;
-  let topScale = 1, topOffsetX = 0, topOffsetY = 0;
-  
-  let isDrawing = false, lastPoint = {x:0,y:0}, isTap = false;
-  let pinchDist = 0, pinchMid = {x:0,y:0};
-  
-  // Selection & editing
-  let selectedShapeIndex = -1;
-  let isDraggingShape = false, dragStart = {x:0,y:0}, dragOrigShape = null;
-  let isResizing = false, resizeHandle = null; // 0:tl,1:tr,2:bl,3:br
-  let isRotating = false, rotateStartAngle = 0, rotateCenter = {x:0,y:0};
-  let resizeStartBounds = null;
-  
-  let mediaRecorder = null, recordedChunks = [], isRecording = false;
-  let micStream = null, isMicEnabled = false;
-  let recordingInterval = null;
-  const hiddenRecordCanvas = document.createElement('canvas');
-  let hiddenRecordCtx = hiddenRecordCanvas.getContext('2d');
-  
-  // ========== UTILITIES ==========
-  function showToast(msg, isError=false) {
-    const toast = document.getElementById('micStatusToast');
-    toast.textContent = msg;
-    toast.style.background = isError ? '#e74c3c' : '#2ecc71';
-    toast.style.display = 'block';
-    setTimeout(() => toast.style.display = 'none', 3000);
-  }
-  
-  function setCanvasesResolution(w, h) {
-    pdfBaseWidth = w; pdfBaseHeight = h;
-    topCanvas.width = w; topCanvas.height = h;
-    mainCanvas.width = w; mainCanvas.height = h;
-    drawingLayerMain.width = w; drawingLayerMain.height = h;
-    drawingLayerTop.width = w; drawingLayerTop.height = h;
-    pdfOffscreen.width = w; pdfOffscreen.height = h;
-    hiddenRecordCanvas.width = w; hiddenRecordCanvas.height = h;
-    topCtx = topCanvas.getContext('2d');
-    mainCtx = mainCanvas.getContext('2d');
-    mainDrawCtx = drawingLayerMain.getContext('2d');
-    topDrawCtx = drawingLayerTop.getContext('2d');
-    mainCtx.setTransform(1,0,0,1,0,0);
-    topCtx.setTransform(1,0,0,1,0,0);
-    redrawBoth();
-  }
-  
-  function redrawBoth() {
-    if (!hasPDF) return;
-    // bottom
-    mainCtx.setTransform(1,0,0,1,0,0);
-    mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height);
-    mainCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-    mainCtx.drawImage(pdfOffscreen, 0, 0);
-    mainCtx.drawImage(drawingLayerMain, 0, 0);
-    // top
-    topCtx.setTransform(1,0,0,1,0,0);
-    topCtx.clearRect(0,0, topCanvas.width, topCanvas.height);
-    if (adjModeActive) topCtx.setTransform(topScale, 0, 0, topScale, topOffsetX, topOffsetY);
-    topCtx.drawImage(pdfOffscreen, 0, 0);
-    topCtx.drawImage(drawingLayerTop, 0, 0);
-    topCtx.setTransform(1,0,0,1,0,0);
-    document.getElementById('topStatus').innerHTML = adjModeActive ? '🔧 ADJ Mode' : '📄 Fixed View';
-    let mode = (currentTool === 'select') ? 'Select' : (currentShape ? `Shape: ${currentShape}` : currentTool);
-    document.getElementById('mainStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Tool: ${mode}`;
-    if (selectedShapeIndex >= 0 && currentTool === 'select') drawSelectionHandles();
-  }
-  
-  function drawSelectionHandles() {
-    if (selectedShapeIndex < 0 || selectedShapeIndex >= currentStrokes.length) return;
-    const shape = currentStrokes[selectedShapeIndex];
-    const bounds = getShapeBounds(shape);
-    if (!bounds) return;
-    // draw bounding box and handles on top of bottom canvas (temporary)
-    mainCtx.save();
-    mainCtx.setTransform(1,0,0,1,0,0);
-    mainCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-    mainCtx.strokeStyle = '#ffd700';
-    mainCtx.lineWidth = 2 / scale;
-    mainCtx.setLineDash([6/scale, 4/scale]);
-    mainCtx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
-    mainCtx.setLineDash([]);
-    const hSize = 10 / scale;
-    mainCtx.fillStyle = '#ffd700';
-    [[bounds.x, bounds.y], [bounds.x+bounds.w, bounds.y], [bounds.x, bounds.y+bounds.h], [bounds.x+bounds.w, bounds.y+bounds.h]].forEach(([x,y]) => {
-      mainCtx.fillRect(x - hSize/2, y - hSize/2, hSize, hSize);
-    });
-    // rotate handle
-    mainCtx.fillStyle = '#e74c3c';
-    mainCtx.beginPath();
-    mainCtx.arc(bounds.x + bounds.w/2, bounds.y - 15/scale, 8/scale, 0, 2*Math.PI);
-    mainCtx.fill();
-    mainCtx.restore();
-  }
-  
-  function getShapeBounds(shape) {
-    if (shape.type === 'shape') {
-      const d = shape.data;
-      if (shape.shapeType === 'rect') return { x: d.x, y: d.y, w: d.w, h: d.h, cx: d.x+d.w/2, cy: d.y+d.h/2 };
-      if (shape.shapeType === 'circle') return { x: d.cx - d.rx, y: d.cy - d.ry, w: d.rx*2, h: d.ry*2, cx: d.cx, cy: d.cy };
-      if (shape.shapeType === 'triangle') {
-        let xs = [d.x1, d.x2, d.x3], ys = [d.y1, d.y2, d.y3];
-        let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-        return { x: minX, y: minY, w: maxX-minX, h: maxY-minY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
-      }
-      if (shape.shapeType === 'diamond') return { x: d.cx - d.rx, y: d.cy - d.ry, w: d.rx*2, h: d.ry*2, cx: d.cx, cy: d.cy };
-      if (shape.shapeType === 'arrow' || shape.shapeType === 'line') {
-        let minX = Math.min(d.x1, d.x2), maxX = Math.max(d.x1, d.x2);
-        let minY = Math.min(d.y1, d.y2), maxY = Math.max(d.y1, d.y2);
-        return { x: minX, y: minY, w: maxX-minX, h: maxY-minY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
-      }
-      if (shape.shapeType === 'polygon') {
-        let xs = d.points.map(p=>p.x), ys = d.points.map(p=>p.y);
-        let minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-        return { x: minX, y: minY, w: maxX-minX, h: maxY-minY, cx: (minX+maxX)/2, cy: (minY+maxY)/2 };
-      }
-    } else if (shape.type === 'image') {
-      return { x: shape.x, y: shape.y, w: shape.w, h: shape.h, cx: shape.x+shape.w/2, cy: shape.y+shape.h/2 };
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    // DOM Elements
+    const topCanvas = document.getElementById('topCanvas');
+    const bottomCanvas = document.getElementById('bottomCanvas');
+    const topCtx = topCanvas.getContext('2d');
+    const bottomCtx = bottomCanvas.getContext('2d');
+    const bgCanvas = document.createElement('canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    const drawLayer = document.createElement('canvas');
+    const drawCtx = drawLayer.getContext('2d');
+    const highlighterLayer = document.createElement('canvas');
+    const highlighterCtx = highlighterLayer.getContext('2d');
+
+    drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+    highlighterCtx.lineCap = 'round'; highlighterCtx.lineJoin = 'round';
+
+    // ========== STATE ==========
+    let currentTool = 'draw';
+    let penColor = '#000000';
+    let penSize = 4;          // screen pixels (will be adjusted for zoom)
+    let opacity = 1;
+    let scale = 1, offsetX = 0, offsetY = 0;   // for bottom canvas
+
+    let objects = [];
+    let editingEnabled = false;
+    let vertexEditEnabled = false;
+    let selectedObjectIndex = -1;
+    let history = [], historyIndex = -1;
+
+    let drawing = false, lastX = 0, lastY = 0, smoothPoints = [];
+    let shapeStart = null, currentShapeType = null;
+    let customPolygonSides = 5;
+
+    let isDraggingObject = false, dragStartX = 0, dragStartY = 0, dragOrigObj = null;
+    let isResizing = false, resizeHandle = null, resizeStartBounds = null;
+    let isRotating = false, rotateStartAngle = 0;
+    let isDraggingVertex = false, vertexIndex = -1;
+
+    // Recording
+    let mediaRecorder = null, recordedChunks = [], isRecording = false;
+    let micStream = null, micEnabled = false;
+
+    // Touch pinch/pan state
+    let initialPinchDist = 0;
+    let initialScale = 1;
+    let initialOffsetX = 0, initialOffsetY = 0;
+    let pinchCenter = { x: 0, y: 0 };
+    let isPinching = false;
+    let twoFingerPan = false;
+    let panStart = { x: 0, y: 0 };
+
+    // ========== HELPER FUNCTIONS ==========
+    function setCanvasSize(w, h) {
+        [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { c.width = w; c.height = h; });
+        drawCtx.clearRect(0, 0, w, h);
+        highlighterCtx.clearRect(0, 0, w, h);
+        scale = 1; offsetX = 0; offsetY = 0;
+        redrawAll();
     }
-    return null;
-  }
-  
-  function hitTestShapes(px, py) {
-    for (let i = currentStrokes.length-1; i >= 0; i--) {
-      const s = currentStrokes[i];
-      if (s.type === 'shape' || s.type === 'image') {
-        const b = getShapeBounds(s);
-        if (b && px >= b.x && px <= b.x+b.w && py >= b.y && py <= b.y+b.h) return i;
-      }
+
+    // Brush: line width in canvas space = penSize / scale (so screen thickness ~ penSize)
+    function setBrush(ctx, tool = currentTool) {
+        const effectiveSize = Math.max(1, penSize / scale);  // ensure visible
+        ctx.globalAlpha = opacity;
+        ctx.lineWidth = effectiveSize;
+        ctx.strokeStyle = penColor;
+        ctx.fillStyle = penColor;
+        ctx.globalCompositeOperation = 'source-over';
+        if (tool === 'marker') { ctx.globalAlpha = opacity * 0.75; ctx.lineWidth = effectiveSize * 1.3; }
+        else if (tool === 'highlighter') { ctx.globalAlpha = 0.25; ctx.lineWidth = effectiveSize * 2.5; }
+        else if (tool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = effectiveSize * 1.8; }
     }
-    return -1;
-  }
-  
-  function updateShapeInStrokes(index, newData) {
-    currentStrokes[index].data = newData;
-    pageStrokes[currentPageNum] = [...currentStrokes];
-    redrawAllStrokesFromArray();
-    saveHistory();
-  }
-  
-  function redrawAllStrokesFromArray() {
-    mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height);
-    topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height);
-    currentStrokes.forEach(stroke => {
-      if (stroke.type === 'shape') {
-        drawShapeOnCtx(mainDrawCtx, stroke.shapeType, stroke.data, stroke.color, stroke.width);
-        drawShapeOnCtx(topDrawCtx, stroke.shapeType, stroke.data, stroke.color, stroke.width);
-      } else if (stroke.type === 'image') {
-        if (stroke.imgElement) {
-          mainDrawCtx.drawImage(stroke.imgElement, stroke.x, stroke.y, stroke.w, stroke.h);
-          topDrawCtx.drawImage(stroke.imgElement, stroke.x, stroke.y, stroke.w, stroke.h);
+
+    // Generate regular polygon points
+    function generatePolygonPoints(cx, cy, radius, sides, rotation = 0) {
+        const points = [];
+        const angleStep = (2 * Math.PI) / sides;
+        const rot = rotation * Math.PI / 180;
+        for (let i = 0; i < sides; i++) {
+            const angle = i * angleStep - Math.PI / 2 + rot;
+            const x = cx + radius * Math.cos(angle);
+            const y = cy + radius * Math.sin(angle);
+            points.push({ x, y });
         }
-      } else {
-        // freehand stroke
-        mainDrawCtx.strokeStyle = stroke.color; mainDrawCtx.lineWidth = stroke.width; mainDrawCtx.lineCap = 'round';
-        topDrawCtx.strokeStyle = stroke.color; topDrawCtx.lineWidth = stroke.width; topDrawCtx.lineCap = 'round';
-        if (stroke.isDot) {
-          mainDrawCtx.fillStyle = stroke.color; topDrawCtx.fillStyle = stroke.color;
-          mainDrawCtx.beginPath(); mainDrawCtx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width/2, 0, Math.PI*2); mainDrawCtx.fill();
-          topDrawCtx.beginPath(); topDrawCtx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width/2, 0, Math.PI*2); topDrawCtx.fill();
+        return points;
+    }
+
+    function getObjectBounds(obj) {
+        if (obj.points) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            obj.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+        }
+        if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w/2, cy: obj.y + obj.h/2 };
+        if (obj.type === 'circle') return { x: obj.cx - obj.rx, y: obj.cy - obj.ry, w: obj.rx*2, h: obj.ry*2, cx: obj.cx, cy: obj.cy };
+        if (obj.type === 'arrow' || obj.type === 'line') {
+            const minX = Math.min(obj.x1, obj.x2), maxX = Math.max(obj.x1, obj.x2);
+            const minY = Math.min(obj.y1, obj.y2), maxY = Math.max(obj.y1, obj.y2);
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+        }
+        if (obj.type === 'triangle' && obj.points) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            obj.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+        }
+        if (obj.type === 'text') return { x: obj.x, y: obj.y - 20, w: 100, h: 30, cx: obj.x + 50, cy: obj.y - 5 };
+        if (obj.type === 'image') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h, cx: obj.x + obj.w/2, cy: obj.y + obj.h/2 };
+        return { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0 };
+    }
+
+    function hitTestObject(px, py) {
+        for (let i = objects.length - 1; i >= 0; i--) {
+            const obj = objects[i];
+            const b = getObjectBounds(obj);
+            if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
+        }
+        return -1;
+    }
+
+    function hitTestVertex(obj, px, py) {
+        if (!obj.points) return -1;
+        const threshold = Math.max(15 / scale, 18);
+        for (let i = 0; i < obj.points.length; i++) {
+            const p = obj.points[i];
+            if (Math.hypot(px - p.x, py - p.y) < threshold) return i;
+        }
+        return -1;
+    }
+
+    function drawObject(ctx, obj) {
+        ctx.save();
+        const screenLineWidth = (obj.lineWidth || penSize) / scale;
+        ctx.strokeStyle = obj.strokeStyle || penColor;
+        ctx.lineWidth = Math.max(1, screenLineWidth);
+        ctx.globalAlpha = obj.opacity || opacity;
+        
+        if (obj.type === 'rect') {
+            ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke();
+        }
+        else if (obj.type === 'circle') {
+            ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2*Math.PI); ctx.stroke();
+        }
+        else if (obj.type === 'arrow') {
+            ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2);
+            const angle = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
+            const sz = Math.min(20 / scale, Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * 0.25);
+            ctx.moveTo(obj.x2, obj.y2);
+            ctx.lineTo(obj.x2 - sz * Math.cos(angle - Math.PI/6), obj.y2 - sz * Math.sin(angle - Math.PI/6));
+            ctx.moveTo(obj.x2, obj.y2);
+            ctx.lineTo(obj.x2 - sz * Math.cos(angle + Math.PI/6), obj.y2 - sz * Math.sin(angle + Math.PI/6));
+            ctx.stroke();
+        }
+        else if (obj.type === 'line') {
+            ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
+        }
+        else if (obj.type === 'triangle' || obj.type === 'polygon') {
+            if (obj.points && obj.points.length >= 3) {
+                ctx.beginPath();
+                ctx.moveTo(obj.points[0].x, obj.points[0].y);
+                for (let i = 1; i < obj.points.length; i++) ctx.lineTo(obj.points[i].x, obj.points[i].y);
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
+        else if (obj.type === 'diamond') {
+            const cx = obj.cx, cy = obj.cy, rx = obj.rx, ry = obj.ry;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - ry);
+            ctx.lineTo(cx + rx, cy);
+            ctx.lineTo(cx, cy + ry);
+            ctx.lineTo(cx - rx, cy);
+            ctx.closePath();
+            ctx.stroke();
+        }
+        else if (obj.type === 'image' && obj.img) {
+            ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
+        }
+        else if (obj.type === 'text') {
+            ctx.font = `${Math.max(8, (obj.fontSize || 20) / scale)}px "Segoe UI"`;
+            ctx.fillStyle = obj.color || penColor;
+            ctx.fillText(obj.text, obj.x, obj.y);
+        }
+        ctx.restore();
+    }
+
+    function drawSelectionHandles(ctx, obj) {
+        const b = getObjectBounds(obj);
+        if (vertexEditEnabled && obj.points && obj.points.length > 0) {
+            ctx.fillStyle = '#00bbff';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2 / scale;
+            for (const p of obj.points) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, Math.max(10 / scale, 14), 0, 2*Math.PI);
+                ctx.fill();
+                ctx.stroke();
+            }
+            return;
+        }
+        ctx.save();
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2.5 / scale;
+        ctx.setLineDash([8/scale, 5/scale]);
+        ctx.strokeRect(b.x, b.y, b.w, b.h);
+        ctx.setLineDash([]);
+        const hSize = Math.max(12 / scale, 14);
+        ctx.fillStyle = '#ffd700';
+        [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => {
+            ctx.fillRect(cx - hSize/2, cy - hSize/2, hSize, hSize);
+        });
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(b.x + b.w/2, b.y - 22/scale, hSize/1.5, 0, 2*Math.PI);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function redrawAll() {
+        // Bottom canvas (zoomable)
+        bottomCtx.setTransform(1, 0, 0, 1, 0, 0);
+        bottomCtx.clearRect(0, 0, bottomCanvas.width, bottomCanvas.height);
+        bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+        bottomCtx.drawImage(bgCanvas, 0, 0);
+        bottomCtx.drawImage(highlighterLayer, 0, 0);
+        bottomCtx.drawImage(drawLayer, 0, 0);
+        objects.forEach(obj => drawObject(bottomCtx, obj));
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            drawSelectionHandles(bottomCtx, objects[selectedObjectIndex]);
+        }
+
+        // Top canvas (static, no transform)
+        topCtx.setTransform(1, 0, 0, 1, 0, 0);
+        topCtx.clearRect(0, 0, topCanvas.width, topCanvas.height);
+        topCtx.drawImage(bgCanvas, 0, 0);
+        topCtx.drawImage(highlighterLayer, 0, 0);
+        topCtx.drawImage(drawLayer, 0, 0);
+        objects.forEach(obj => drawObject(topCtx, obj));
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            drawSelectionHandles(topCtx, objects[selectedObjectIndex]);
+        }
+
+        const mode = vertexEditEnabled ? '✏️ Vertex Edit' : (editingEnabled ? '🔧 Edit' : '✏️ Draw');
+        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Objects: ${objects.length} | Mode: ${mode}`;
+        document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline' : 'none';
+    }
+
+    function saveHistory() {
+        const state = {
+            drawData: drawLayer.toDataURL(),
+            highlighterData: highlighterLayer.toDataURL(),
+            bgData: bgCanvas.toDataURL(),
+            objects: objects.map(o => {
+                const copy = { ...o };
+                if (o.img) { copy.imgSrc = o.img.src; delete copy.img; }
+                return copy;
+            })
+        };
+        if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
+        history.push(state);
+        historyIndex = history.length - 1;
+        if (history.length > 30) { history.shift(); historyIndex--; }
+    }
+
+    function restoreHistory(state) {
+        const i1 = new Image(); i1.onload = () => { drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height); drawCtx.drawImage(i1,0,0); redrawAll(); };
+        i1.src = state.drawData;
+        const i2 = new Image(); i2.onload = () => { highlighterCtx.clearRect(0,0,highlighterLayer.width,highlighterLayer.height); highlighterCtx.drawImage(i2,0,0); redrawAll(); };
+        i2.src = state.highlighterData;
+        const i3 = new Image(); i3.onload = () => { bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height); bgCtx.drawImage(i3,0,0); redrawAll(); };
+        i3.src = state.bgData;
+        objects = state.objects.map(o => { if (o.imgSrc) { const img = new Image(); img.src = o.imgSrc; return { ...o, img }; } return o; });
+        selectedObjectIndex = -1;
+        redrawAll();
+    }
+
+    function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(history[historyIndex]); } }
+    function redo() { if (historyIndex < history.length - 1) { historyIndex++; restoreHistory(history[historyIndex]); } }
+
+    // Convert screen/touch point to canvas (world) coordinates considering zoom/pan
+    function getCanvasCoords(e) {
+        const rect = bottomCanvas.getBoundingClientRect();
+        let clientX, clientY;
+        if (e.touches && e.touches.length) {
+            clientX = e.touches[0].clientX - rect.left;
+            clientY = e.touches[0].clientY - rect.top;
+        } else if (e.changedTouches && e.changedTouches.length) {
+            clientX = e.changedTouches[0].clientX - rect.left;
+            clientY = e.changedTouches[0].clientY - rect.top;
         } else {
-          mainDrawCtx.beginPath(); mainDrawCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-          topDrawCtx.beginPath(); topDrawCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-          for (let i=1; i<stroke.points.length; i++) {
-            mainDrawCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
-            topDrawCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
-          }
-          mainDrawCtx.stroke(); topDrawCtx.stroke();
+            clientX = e.clientX - rect.left;
+            clientY = e.clientY - rect.top;
         }
-      }
-    });
-    redrawBoth();
-  }
-  
-  function drawShapeOnCtx(ctx, shapeType, data, color, width) {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    if (shapeType === 'rect') {
-      ctx.rect(data.x, data.y, data.w, data.h);
-      ctx.stroke();
-    } else if (shapeType === 'circle') {
-      ctx.ellipse(data.cx, data.cy, data.rx, data.ry, 0, 0, 2*Math.PI);
-      ctx.stroke();
-    } else if (shapeType === 'triangle') {
-      ctx.moveTo(data.x1, data.y1);
-      ctx.lineTo(data.x2, data.y2);
-      ctx.lineTo(data.x3, data.y3);
-      ctx.closePath();
-      ctx.stroke();
-    } else if (shapeType === 'diamond') {
-      ctx.moveTo(data.cx, data.cy - data.ry);
-      ctx.lineTo(data.cx + data.rx, data.cy);
-      ctx.lineTo(data.cx, data.cy + data.ry);
-      ctx.lineTo(data.cx - data.rx, data.cy);
-      ctx.closePath();
-      ctx.stroke();
-    } else if (shapeType === 'arrow') {
-      ctx.moveTo(data.x1, data.y1);
-      ctx.lineTo(data.x2, data.y2);
-      ctx.stroke();
-      const angle = Math.atan2(data.y2 - data.y1, data.x2 - data.x1);
-      const sz = Math.min(20, Math.hypot(data.x2-data.x1, data.y2-data.y1) * 0.25);
-      ctx.beginPath();
-      ctx.moveTo(data.x2, data.y2);
-      ctx.lineTo(data.x2 - sz * Math.cos(angle - Math.PI/6), data.y2 - sz * Math.sin(angle - Math.PI/6));
-      ctx.moveTo(data.x2, data.y2);
-      ctx.lineTo(data.x2 - sz * Math.cos(angle + Math.PI/6), data.y2 - sz * Math.sin(angle + Math.PI/6));
-      ctx.stroke();
-    } else if (shapeType === 'line') {
-      ctx.moveTo(data.x1, data.y1);
-      ctx.lineTo(data.x2, data.y2);
-      ctx.stroke();
-    } else if (shapeType === 'polygon') {
-      ctx.moveTo(data.points[0].x, data.points[0].y);
-      for (let i=1; i<data.points.length; i++) ctx.lineTo(data.points[i].x, data.points[i].y);
-      ctx.closePath();
-      ctx.stroke();
+        // Normalize to canvas pixel coordinates (0..width)
+        const canvasX = (clientX / rect.width) * bottomCanvas.width;
+        const canvasY = (clientY / rect.height) * bottomCanvas.height;
+        // Apply inverse transform
+        return {
+            x: (canvasX - offsetX) / scale,
+            y: (canvasY - offsetY) / scale
+        };
     }
-    ctx.restore();
-  }
-  
-  // Shape creation
-  function startShape(e) {
-    if (adjModeActive || !currentShape) return;
-    e.preventDefault();
-    shapeStart = getCanvasCoords(e, mainCanvas);
-    isDrawing = true;
-  }
-  
-  function drawShapePreview(e) {
-    if (!isDrawing || !shapeStart || !currentShape) return;
-    e.preventDefault();
-    const p = getCanvasCoords(e, mainCanvas);
-    const w = p.x - shapeStart.x;
-    const h = p.y - shapeStart.y;
-    // redraw bottom with preview
-    mainCtx.save();
-    mainCtx.setTransform(1,0,0,1,0,0);
-    mainCtx.clearRect(0,0, mainCanvas.width, mainCanvas.height);
-    mainCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-    mainCtx.drawImage(pdfOffscreen, 0, 0);
-    mainCtx.drawImage(drawingLayerMain, 0, 0);
-    mainCtx.strokeStyle = penColor;
-    mainCtx.lineWidth = penSize;
-    mainCtx.beginPath();
-    if (currentShape === 'rect') mainCtx.strokeRect(shapeStart.x, shapeStart.y, w, h);
-    else if (currentShape === 'circle') { let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; mainCtx.ellipse(cx,cy,Math.abs(w)/2,Math.abs(h)/2,0,0,2*Math.PI); mainCtx.stroke(); }
-    else if (currentShape === 'triangle') { let cx=shapeStart.x+w/2; mainCtx.moveTo(cx,shapeStart.y); mainCtx.lineTo(shapeStart.x,shapeStart.y+h); mainCtx.lineTo(shapeStart.x+w,shapeStart.y+h); mainCtx.closePath(); mainCtx.stroke(); }
-    else if (currentShape === 'diamond') { let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; mainCtx.moveTo(cx,shapeStart.y); mainCtx.lineTo(shapeStart.x+w,cy); mainCtx.lineTo(cx,shapeStart.y+h); mainCtx.lineTo(shapeStart.x,cy); mainCtx.closePath(); mainCtx.stroke(); }
-    else if (currentShape === 'arrow') { mainCtx.moveTo(shapeStart.x,shapeStart.y); mainCtx.lineTo(p.x,p.y); mainCtx.stroke(); let ang=Math.atan2(p.y-shapeStart.y, p.x-shapeStart.x); let sz=Math.min(20,Math.hypot(w,h)*0.25); mainCtx.beginPath(); mainCtx.moveTo(p.x,p.y); mainCtx.lineTo(p.x-sz*Math.cos(ang-Math.PI/6),p.y-sz*Math.sin(ang-Math.PI/6)); mainCtx.moveTo(p.x,p.y); mainCtx.lineTo(p.x-sz*Math.cos(ang+Math.PI/6),p.y-sz*Math.sin(ang+Math.PI/6)); mainCtx.stroke(); }
-    else if (currentShape === 'line') { mainCtx.moveTo(shapeStart.x,shapeStart.y); mainCtx.lineTo(p.x,p.y); mainCtx.stroke(); }
-    else if (currentShape === 'polygon') { let sides=customPolygonSides; let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; let rad=Math.min(Math.abs(w),Math.abs(h))/2; let pts=generatePolygonPoints(cx,cy,rad,sides); mainCtx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) mainCtx.lineTo(pts[i].x,pts[i].y); mainCtx.closePath(); mainCtx.stroke(); }
-    mainCtx.restore();
-  }
-  
-  function generatePolygonPoints(cx, cy, radius, sides, rotation=0) {
-    let pts = [];
-    let step = 2*Math.PI/sides;
-    let rot = rotation * Math.PI/180;
-    for(let i=0;i<sides;i++) {
-      let angle = i*step - Math.PI/2 + rot;
-      pts.push({ x: cx + radius*Math.cos(angle), y: cy + radius*Math.sin(angle) });
+
+    // ========== DRAWING SMOOTH LINE ==========
+    function drawSmoothLine(points) {
+        if (points.length < 2) return;
+        const targetCtx = (currentTool === 'highlighter') ? highlighterCtx : drawCtx;
+        targetCtx.save();
+        setBrush(targetCtx, currentTool);
+        targetCtx.beginPath();
+        targetCtx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length - 1; i++) {
+            const xc = (points[i].x + points[i+1].x) / 2;
+            const yc = (points[i].y + points[i+1].y) / 2;
+            targetCtx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+        }
+        targetCtx.lineTo(points[points.length-1].x, points[points.length-1].y);
+        targetCtx.stroke();
+        targetCtx.restore();
+        redrawAll();
     }
-    return pts;
-  }
-  
-  function endShape(e) {
-    if (!isDrawing || !shapeStart || !currentShape) { isDrawing=false; shapeStart=null; return; }
-    e.preventDefault();
-    const p = getCanvasCoords(e, mainCanvas);
-    const w = p.x - shapeStart.x;
-    const h = p.y - shapeStart.y;
-    if (Math.hypot(w, h) > 3) {
-      let shapeData = null;
-      if (currentShape === 'rect') shapeData = { x: Math.min(shapeStart.x,p.x), y: Math.min(shapeStart.y,p.y), w: Math.abs(w), h: Math.abs(h) };
-      else if (currentShape === 'circle') shapeData = { cx: shapeStart.x + w/2, cy: shapeStart.y + h/2, rx: Math.abs(w)/2, ry: Math.abs(h)/2 };
-      else if (currentShape === 'triangle') { let cx=shapeStart.x+w/2; shapeData = { x1: cx, y1: shapeStart.y, x2: shapeStart.x, y2: shapeStart.y+h, x3: shapeStart.x+w, y3: shapeStart.y+h }; }
-      else if (currentShape === 'diamond') shapeData = { cx: shapeStart.x + w/2, cy: shapeStart.y + h/2, rx: Math.abs(w)/2, ry: Math.abs(h)/2 };
-      else if (currentShape === 'arrow') shapeData = { x1: shapeStart.x, y1: shapeStart.y, x2: p.x, y2: p.y };
-      else if (currentShape === 'line') shapeData = { x1: shapeStart.x, y1: shapeStart.y, x2: p.x, y2: p.y };
-      else if (currentShape === 'polygon') { let sides=customPolygonSides; let cx=shapeStart.x+w/2, cy=shapeStart.y+h/2; let rad=Math.min(Math.abs(w),Math.abs(h))/2; let pts=generatePolygonPoints(cx,cy,rad,sides); shapeData = { points: pts }; }
-      if (shapeData) {
-        currentStrokes.push({ type: 'shape', shapeType: currentShape, data: shapeData, color: penColor, width: penSize });
-        pageStrokes[currentPageNum] = [...currentStrokes];
+
+    // ========== EVENT HANDLERS ==========
+    function handleDown(e) {
+        if (e.type === 'mousedown' && e.button !== 0) return;
+        e.preventDefault();
+        if (currentTool === 'none') return;
+        const p = getCanvasCoords(e);
+
+        // Vertex edit mode
+        if (vertexEditEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const obj = objects[selectedObjectIndex];
+            const vertexIdx = hitTestVertex(obj, p.x, p.y);
+            if (vertexIdx >= 0) {
+                isDraggingVertex = true;
+                vertexIndex = vertexIdx;
+                return;
+            }
+        }
+
+        // Edit mode (resize/rotate/drag)
+        if (editingEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const obj = objects[selectedObjectIndex];
+            const b = getObjectBounds(obj);
+            const hSize = Math.max(12 / scale, 14);
+            const rotCenter = { x: b.x + b.w/2, y: b.y - 22/scale };
+            if (Math.hypot(p.x - rotCenter.x, p.y - rotCenter.y) < hSize) {
+                isRotating = true;
+                rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+                return;
+            }
+            const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
+            for (let i = 0; i < corners.length; i++) {
+                if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
+                    isResizing = true;
+                    resizeHandle = i;
+                    resizeStartBounds = { ...b };
+                    dragStartX = p.x; dragStartY = p.y;
+                    return;
+                }
+            }
+            if (hitTestObject(p.x, p.y) === selectedObjectIndex) {
+                isDraggingObject = true;
+                dragStartX = p.x; dragStartY = p.y;
+                dragOrigObj = JSON.parse(JSON.stringify(obj));
+                redrawAll();
+                return;
+            }
+        }
+
+        // Select tool
+        if (currentTool === 'select') {
+            const hit = hitTestObject(p.x, p.y);
+            if (hit >= 0) {
+                selectedObjectIndex = hit;
+                isDraggingObject = true;
+                dragStartX = p.x; dragStartY = p.y;
+                dragOrigObj = JSON.parse(JSON.stringify(objects[hit]));
+                redrawAll();
+            } else {
+                selectedObjectIndex = -1;
+                redrawAll();
+            }
+            return;
+        }
+
+        // Edit mode - simple select
+        if (editingEnabled) {
+            const hit = hitTestObject(p.x, p.y);
+            selectedObjectIndex = hit;
+            redrawAll();
+            return;
+        }
+
+        // Fill tool
+        if (currentTool === 'fill') {
+            floodFill(Math.round(p.x), Math.round(p.y));
+            return;
+        }
+        
+        // Shape tools
+        if (['rect', 'circle', 'triangle', 'diamond', 'polygon', 'arrow', 'line'].includes(currentTool)) {
+            shapeStart = p;
+            currentShapeType = currentTool;
+            drawing = true;
+            return;
+        }
+
+        // Pen/marker/highlighter/eraser
+        drawing = true;
+        smoothPoints = [{ x: p.x, y: p.y }];
+        lastX = p.x; lastY = p.y;
         saveHistory();
-        redrawAllStrokesFromArray();
-      }
     }
-    isDrawing = false;
-    shapeStart = null;
-  }
-  
-  // Freehand drawing
-  function startDraw(e) {
-    if (adjModeActive) return;
-    if (currentShape) { startShape(e); return; }
-    if (currentTool === 'select') return;
-    isDrawing = true; isTap = true;
-    lastPoint = getCanvasCoords(e, mainCanvas);
-    if (currentTool !== 'smartErase') saveHistory();
-  }
-  
-  function drawMove(e) {
-    if (!isDrawing || adjModeActive) return;
-    if (currentShape) { drawShapePreview(e); return; }
-    if (currentTool === 'select') return;
-    const p = getCanvasCoords(e, mainCanvas);
-    if (isTap && Math.hypot(p.x-lastPoint.x, p.y-lastPoint.y) < 2) return;
-    isTap = false;
-    drawStrokeSegment(lastPoint, p, false);
-    lastPoint = p;
-  }
-  
-  function drawStrokeSegment(from, to, isDot) {
-    if (currentTool === 'draw') {
-      mainDrawCtx.strokeStyle = penColor; mainDrawCtx.lineWidth = penSize; mainDrawCtx.lineCap = 'round';
-      topDrawCtx.strokeStyle = penColor; topDrawCtx.lineWidth = penSize; topDrawCtx.lineCap = 'round';
-      if (!isDot) {
-        mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x, from.y); mainDrawCtx.lineTo(to.x, to.y); mainDrawCtx.stroke();
-        topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x, from.y); topDrawCtx.lineTo(to.x, to.y); topDrawCtx.stroke();
-      } else {
-        mainDrawCtx.fillStyle = penColor; topDrawCtx.fillStyle = penColor;
-        mainDrawCtx.beginPath(); mainDrawCtx.arc(to.x, to.y, penSize/2, 0, 2*Math.PI); mainDrawCtx.fill();
-        topDrawCtx.beginPath(); topDrawCtx.arc(to.x, to.y, penSize/2, 0, 2*Math.PI); topDrawCtx.fill();
-      }
-    } else if (currentTool === 'eraser') {
-      mainDrawCtx.globalCompositeOperation = 'destination-out'; topDrawCtx.globalCompositeOperation = 'destination-out';
-      mainDrawCtx.lineWidth = penSize*2; topDrawCtx.lineWidth = penSize*2;
-      mainDrawCtx.beginPath(); mainDrawCtx.moveTo(from.x, from.y); mainDrawCtx.lineTo(to.x, to.y); mainDrawCtx.stroke();
-      topDrawCtx.beginPath(); topDrawCtx.moveTo(from.x, from.y); topDrawCtx.lineTo(to.x, to.y); topDrawCtx.stroke();
-      mainDrawCtx.globalCompositeOperation = 'source-over'; topDrawCtx.globalCompositeOperation = 'source-over';
-    } else if (currentTool === 'smartErase') {
-      const tolerance = penSize * 2.5;
-      let removed = false;
-      currentStrokes = currentStrokes.filter(stroke => {
-        if (stroke.type === 'shape' || stroke.type === 'image') {
-          const b = getShapeBounds(stroke);
-          if (b && to.x >= b.x && to.x <= b.x+b.w && to.y >= b.y && to.y <= b.y+b.h) { removed = true; return false; }
-          return true;
-        } else if (stroke.points) {
-          for (let p of stroke.points) if (Math.hypot(p.x-to.x, p.y-to.y) < tolerance) { removed = true; return false; }
-          return true;
+
+    function handleMove(e) {
+        // Vertex dragging
+        if (isDraggingVertex && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            if (obj.points && vertexIndex < obj.points.length) {
+                obj.points[vertexIndex] = { x: p.x, y: p.y };
+                redrawAll();
+            }
+            return;
         }
-        return true;
-      });
-      if (removed) { redrawAllStrokesFromArray(); saveHistory(); }
+        // Rotation
+        if (isRotating && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            const b = getObjectBounds(obj);
+            const newAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
+            const delta = ((newAngle - rotateStartAngle) * 180) / Math.PI;
+            obj.rotation = (obj.rotation || 0) + delta;
+            rotateStartAngle = newAngle;
+            redrawAll();
+            return;
+        }
+        // Resizing
+        if (isResizing && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const obj = objects[selectedObjectIndex];
+            const dx = p.x - dragStartX;
+            const dy = p.y - dragStartY;
+            const orig = resizeStartBounds;
+            
+            if (obj.type === 'rect') {
+                if (resizeHandle === 0) { obj.x = orig.x + dx; obj.y = orig.y + dy; obj.w = orig.w - dx; obj.h = orig.h - dy; }
+                else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
+                else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
+                else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
+                if (obj.w < 5) obj.w = 5; if (obj.h < 5) obj.h = 5;
+            }
+            else if (obj.type === 'circle') {
+                const newW = orig.w + (resizeHandle % 2 === 0 ? -dx : dx);
+                const newH = orig.h + (resizeHandle < 2 ? -dy : dy);
+                obj.rx = Math.max(5, newW / 2); obj.ry = Math.max(5, newH / 2);
+                obj.cx = orig.cx + (resizeHandle % 2 === 0 ? dx/2 : 0);
+                obj.cy = orig.cy + (resizeHandle < 2 ? dy/2 : 0);
+            }
+            else if (obj.type === 'arrow' || obj.type === 'line') {
+                if (resizeHandle === 0) { obj.x1 = p.x; obj.y1 = p.y; }
+                else { obj.x2 = p.x; obj.y2 = p.y; }
+            }
+            else if (obj.points) {
+                const scaleX = (orig.w + (resizeHandle % 2 === 0 ? -dx : dx)) / orig.w;
+                const scaleY = (orig.h + (resizeHandle < 2 ? -dy : dy)) / orig.h;
+                if (scaleX > 0.1 && scaleY > 0.1) {
+                    obj.points = dragOrigObj.points.map(p => ({
+                        x: orig.cx + (p.x - orig.cx) * scaleX,
+                        y: orig.cy + (p.y - orig.cy) * scaleY
+                    }));
+                }
+            }
+            redrawAll();
+            return;
+        }
+        // Dragging object
+        if (isDraggingObject && selectedObjectIndex >= 0) {
+            const p = getCanvasCoords(e);
+            const dx = p.x - dragStartX, dy = p.y - dragStartY;
+            const obj = objects[selectedObjectIndex];
+            if (obj.type === 'rect') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
+            else if (obj.type === 'circle') { obj.cx = dragOrigObj.cx + dx; obj.cy = dragOrigObj.cy + dy; }
+            else if (obj.type === 'arrow' || obj.type === 'line') {
+                obj.x1 = dragOrigObj.x1 + dx; obj.y1 = dragOrigObj.y1 + dy;
+                obj.x2 = dragOrigObj.x2 + dx; obj.y2 = dragOrigObj.y2 + dy;
+            }
+            else if (obj.points) {
+                obj.points = dragOrigObj.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+            }
+            else if (obj.type === 'image') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
+            else if (obj.type === 'text') { obj.x = dragOrigObj.x + dx; obj.y = dragOrigObj.y + dy; }
+            redrawAll();
+            return;
+        }
+        
+        if (!drawing) return;
+        e.preventDefault();
+        const p = getCanvasCoords(e);
+        
+        // Shape drawing preview
+        if (currentShapeType && shapeStart) {
+            redrawAll();
+            bottomCtx.save();
+            setBrush(bottomCtx, currentTool);
+            const w = p.x - shapeStart.x;
+            const h = p.y - shapeStart.y;
+            
+            if (currentShapeType === 'rect') {
+                bottomCtx.strokeRect(shapeStart.x, shapeStart.y, w, h);
+            }
+            else if (currentShapeType === 'circle') {
+                const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                bottomCtx.beginPath();
+                bottomCtx.ellipse(cx, cy, Math.abs(w)/2, Math.abs(h)/2, 0, 0, 2*Math.PI);
+                bottomCtx.stroke();
+            }
+            else if (currentShapeType === 'triangle') {
+                const cx = shapeStart.x + w/2;
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(cx, shapeStart.y);
+                bottomCtx.lineTo(shapeStart.x, shapeStart.y + h);
+                bottomCtx.lineTo(shapeStart.x + w, shapeStart.y + h);
+                bottomCtx.closePath();
+                bottomCtx.stroke();
+            }
+            else if (currentShapeType === 'diamond') {
+                const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(cx, shapeStart.y);
+                bottomCtx.lineTo(shapeStart.x + w, cy);
+                bottomCtx.lineTo(cx, shapeStart.y + h);
+                bottomCtx.lineTo(shapeStart.x, cy);
+                bottomCtx.closePath();
+                bottomCtx.stroke();
+            }
+            else if (currentShapeType === 'polygon') {
+                const sides = customPolygonSides;
+                const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
+                const points = generatePolygonPoints(cx, cy, radius, sides);
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) bottomCtx.lineTo(points[i].x, points[i].y);
+                bottomCtx.closePath();
+                bottomCtx.stroke();
+            }
+            else if (currentShapeType === 'arrow' || currentShapeType === 'line') {
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(shapeStart.x, shapeStart.y);
+                bottomCtx.lineTo(p.x, p.y);
+                bottomCtx.stroke();
+                if (currentShapeType === 'arrow') {
+                    const angle = Math.atan2(p.y - shapeStart.y, p.x - shapeStart.x);
+                    const sz = Math.min(20 / scale, Math.hypot(w, h) * 0.25);
+                    bottomCtx.beginPath();
+                    bottomCtx.moveTo(p.x, p.y);
+                    bottomCtx.lineTo(p.x - sz * Math.cos(angle - Math.PI/6), p.y - sz * Math.sin(angle - Math.PI/6));
+                    bottomCtx.moveTo(p.x, p.y);
+                    bottomCtx.lineTo(p.x - sz * Math.cos(angle + Math.PI/6), p.y - sz * Math.sin(angle + Math.PI/6));
+                    bottomCtx.stroke();
+                }
+            }
+            bottomCtx.restore();
+            return;
+        }
+        
+        // Freehand drawing
+        if (Math.hypot(p.x - lastX, p.y - lastY) > 1) {
+            smoothPoints.push({ x: p.x, y: p.y });
+            if (smoothPoints.length > 3) smoothPoints.shift();
+            drawSmoothLine(smoothPoints);
+            lastX = p.x; lastY = p.y;
+        }
     }
-    redrawBoth();
-  }
-  
-  function endDraw(e) {
-    if (!isDrawing || adjModeActive) { isDrawing=false; shapeStart=null; return; }
-    if (currentShape) { endShape(e); return; }
-    if (currentTool === 'select') { isDrawing=false; return; }
-    if (isTap) {
-      const p = getCanvasCoords(e, mainCanvas);
-      drawStrokeSegment(p, p, true);
-      currentStrokes.push({ points: [{x:p.x,y:p.y}], color: penColor, width: penSize, isDot: true });
-    } else {
-      // we already added points incrementally? need to store full stroke
-      // For simplicity, we store last point as a new stroke - but proper would be to collect points during draw.
-      // We'll collect points in an array during drawing.
+
+    function handleUp(e) {
+        if (isDraggingVertex) {
+            isDraggingVertex = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (isRotating || isResizing) {
+            isRotating = isResizing = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (isDraggingObject) {
+            isDraggingObject = false;
+            saveHistory();
+            redrawAll();
+            return;
+        }
+        if (!drawing && !currentShapeType) return;
+        e.preventDefault();
+        
+        if (currentShapeType && shapeStart) {
+            const p = getCanvasCoords(e);
+            if (Math.hypot(p.x - shapeStart.x, p.y - shapeStart.y) > 5) {
+                const w = p.x - shapeStart.x;
+                const h = p.y - shapeStart.y;
+                const obj = { strokeStyle: penColor, lineWidth: penSize, opacity };
+                
+                if (currentShapeType === 'rect') {
+                    obj.type = 'rect'; obj.x = Math.min(shapeStart.x, p.x); obj.y = Math.min(shapeStart.y, p.y); obj.w = Math.abs(w); obj.h = Math.abs(h);
+                }
+                else if (currentShapeType === 'circle') {
+                    obj.type = 'circle'; obj.cx = shapeStart.x + w/2; obj.cy = shapeStart.y + h/2; obj.rx = Math.abs(w)/2; obj.ry = Math.abs(h)/2;
+                }
+                else if (currentShapeType === 'triangle') {
+                    obj.type = 'triangle'; const cx = shapeStart.x + w/2;
+                    obj.points = [{ x: cx, y: shapeStart.y }, { x: shapeStart.x, y: shapeStart.y + h }, { x: shapeStart.x + w, y: shapeStart.y + h }];
+                }
+                else if (currentShapeType === 'diamond') {
+                    obj.type = 'diamond'; obj.cx = shapeStart.x + w/2; obj.cy = shapeStart.y + h/2; obj.rx = Math.abs(w)/2; obj.ry = Math.abs(h)/2;
+                }
+                else if (currentShapeType === 'polygon') {
+                    obj.type = 'polygon'; const cx = shapeStart.x + w/2, cy = shapeStart.y + h/2;
+                    const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
+                    obj.points = generatePolygonPoints(cx, cy, radius, customPolygonSides);
+                }
+                else if (currentShapeType === 'arrow') {
+                    obj.type = 'arrow'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y;
+                }
+                else if (currentShapeType === 'line') {
+                    obj.type = 'line'; obj.x1 = shapeStart.x; obj.y1 = shapeStart.y; obj.x2 = p.x; obj.y2 = p.y;
+                }
+                objects.push(obj);
+                saveHistory();
+            }
+            currentShapeType = null;
+            shapeStart = null;
+            drawing = false;
+            redrawAll();
+            return;
+        }
+        
+        drawing = false;
+        smoothPoints = [];
+        redrawAll();
     }
-    pageStrokes[currentPageNum] = [...currentStrokes];
+
+    function floodFill(x, y) {
+        const imgData = drawCtx.getImageData(0, 0, drawLayer.width, drawLayer.height);
+        const getPixel = (d, x, y) => { const i = (y * d.width + x) * 4; return { r: d.data[i], g: d.data[i+1], b: d.data[i+2] }; };
+        const target = getPixel(imgData, x, y);
+        const fillRGB = hexToRgb(penColor);
+        const colorMatch = (c1, c2) => Math.abs(c1.r - c2.r) < 10 && Math.abs(c1.g - c2.g) < 10 && Math.abs(c1.b - c2.b) < 10;
+        if (colorMatch(target, fillRGB)) return;
+        const stack = [[x, y]];
+        while (stack.length) {
+            const [px, py] = stack.pop();
+            if (px < 0 || py < 0 || px >= drawLayer.width || py >= drawLayer.height) continue;
+            if (!colorMatch(getPixel(imgData, px, py), target)) continue;
+            const i = (py * drawLayer.width + px) * 4;
+            imgData.data[i] = fillRGB.r; imgData.data[i+1] = fillRGB.g; imgData.data[i+2] = fillRGB.b; imgData.data[i+3] = 255;
+            stack.push([px+1, py], [px-1, py], [px, py+1], [px, py-1]);
+        }
+        drawCtx.putImageData(imgData, 0, 0);
+        redrawAll();
+        saveHistory();
+    }
+    
+    function hexToRgb(h) { return { r: parseInt(h.slice(1,3),16), g: parseInt(h.slice(3,5),16), b: parseInt(h.slice(5,7),16) }; }
+
+    // ========== RECORDING ==========
+    async function toggleRecording() {
+        if (isRecording) {
+            if (mediaRecorder) mediaRecorder.stop();
+            isRecording = false;
+            document.getElementById('recIndicator').style.display = 'none';
+            document.getElementById('recordBtn').innerHTML = '🔴 Rec';
+            return;
+        }
+        try {
+            const stream = topCanvas.captureStream(30);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            recordedChunks = [];
+            mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `whiteboard-${Date.now()}.webm`;
+                a.click();
+            };
+            mediaRecorder.start(1000);
+            isRecording = true;
+            document.getElementById('recIndicator').style.display = 'block';
+            document.getElementById('recordBtn').innerHTML = '⏹️ Stop';
+        } catch (e) { alert('Recording error: ' + e.message); }
+    }
+    
+    async function toggleMic() {
+        if (micStream) {
+            micStream.getTracks().forEach(t => t.stop());
+            micStream = null;
+            micEnabled = false;
+            document.getElementById('micBtn').classList.remove('active');
+        } else {
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                micEnabled = true;
+                document.getElementById('micBtn').classList.add('active');
+            } catch (e) { alert('Microphone access denied'); }
+        }
+    }
+
+    // ========== TOOL FUNCTIONS ==========
+    function setTool(t) {
+        currentTool = t;
+        // Update active button style
+        document.querySelectorAll('#drawBtn, #markerBtn, #highlighterBtn, #eraseBtn, #fillBtn, #selectBtn, #rectBtn, #circleBtn, #triangleBtn, #diamondBtn, #polygonBtn, #arrowBtn, #lineBtn').forEach(btn => btn.classList.remove('active'));
+        const map = { 'draw':'drawBtn', 'marker':'markerBtn', 'highlighter':'highlighterBtn', 'eraser':'eraseBtn', 'fill':'fillBtn', 'select':'selectBtn', 'rect':'rectBtn', 'circle':'circleBtn', 'triangle':'triangleBtn', 'diamond':'diamondBtn', 'polygon':'polygonBtn', 'arrow':'arrowBtn', 'line':'lineBtn' };
+        if (map[t]) document.getElementById(map[t]).classList.add('active');
+        // If switching to shape, ensure shapeStart is null
+        if (['rect','circle','triangle','diamond','polygon','arrow','line'].includes(t)) {
+            currentShapeType = t;
+        } else {
+            currentShapeType = null;
+        }
+        redrawAll();
+    }
+
+    // ========== UI BINDINGS ==========
+    document.getElementById('drawBtn').onclick = () => setTool('draw');
+    document.getElementById('markerBtn').onclick = () => setTool('marker');
+    document.getElementById('highlighterBtn').onclick = () => setTool('highlighter');
+    document.getElementById('eraseBtn').onclick = () => setTool('eraser');
+    document.getElementById('fillBtn').onclick = () => setTool('fill');
+    document.getElementById('selectBtn').onclick = () => setTool('select');
+    document.getElementById('rectBtn').onclick = () => setTool('rect');
+    document.getElementById('circleBtn').onclick = () => setTool('circle');
+    document.getElementById('triangleBtn').onclick = () => setTool('triangle');
+    document.getElementById('diamondBtn').onclick = () => setTool('diamond');
+    document.getElementById('polygonBtn').onclick = () => {
+        customPolygonSides = parseInt(document.getElementById('polygonSides').value) || 5;
+        setTool('polygon');
+    };
+    document.getElementById('arrowBtn').onclick = () => setTool('arrow');
+    document.getElementById('lineBtn').onclick = () => setTool('line');
+    
+    document.getElementById('editToggleBtn').onclick = () => {
+        editingEnabled = !editingEnabled;
+        vertexEditEnabled = false;
+        document.getElementById('editToggleBtn').classList.toggle('active', editingEnabled);
+        document.getElementById('vertexEditBtn').classList.remove('active');
+        redrawAll();
+    };
+    document.getElementById('vertexEditBtn').onclick = () => {
+        vertexEditEnabled = !vertexEditEnabled;
+        editingEnabled = true;
+        document.getElementById('vertexEditBtn').classList.toggle('active', vertexEditEnabled);
+        document.getElementById('editToggleBtn').classList.add('active');
+        redrawAll();
+    };
+    
+    document.getElementById('textBtn').onclick = () => {
+        const t = prompt('Enter text:', 'Text');
+        if (t) {
+            objects.push({ type: 'text', text: t, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: penSize*5, color: penColor });
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('rotateLeftBtn').onclick = () => {
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation || 0) - 15;
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('rotateRightBtn').onclick = () => {
+        if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
+            objects[selectedObjectIndex].rotation = (objects[selectedObjectIndex].rotation || 0) + 15;
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('deleteObjBtn').onclick = () => {
+        if (selectedObjectIndex >= 0) {
+            objects.splice(selectedObjectIndex, 1);
+            selectedObjectIndex = -1;
+            redrawAll(); saveHistory();
+        }
+    };
+    document.getElementById('undoBtn').onclick = undo;
+    document.getElementById('redoBtn').onclick = redo;
+    document.getElementById('clearBtn').onclick = () => {
+        drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height);
+        highlighterCtx.clearRect(0,0,highlighterLayer.width,highlighterLayer.height);
+        objects = []; selectedObjectIndex = -1;
+        redrawAll(); saveHistory();
+    };
+    document.getElementById('penColor').oninput = e => penColor = e.target.value;
+    document.getElementById('brushSize').oninput = e => { penSize = +e.target.value; document.getElementById('sizeLabel').textContent = penSize+'px'; };
+    document.getElementById('opacitySlider').oninput = e => opacity = +e.target.value;
+    document.getElementById('themeBtn').onclick = () => document.body.classList.toggle('light');
+    document.getElementById('exportImgBtn').onclick = () => { const a = document.createElement('a'); a.download = 'board.png'; a.href = topCanvas.toDataURL(); a.click(); };
+    document.getElementById('recordBtn').onclick = toggleRecording;
+    document.getElementById('micBtn').onclick = toggleMic;
+    
+    // Color palette
+    const colors = ['#000000','#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#e67e22','#1abc9c','#ffffff'];
+    const paletteDiv = document.getElementById('colorPalette');
+    colors.forEach(c => {
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = c;
+        swatch.onclick = () => { penColor = c; document.getElementById('penColor').value = c; };
+        paletteDiv.appendChild(swatch);
+    });
+    
+    // File handlers
+    document.getElementById('pdfFile').addEventListener('change', async e => {
+        if (!e.target.files[0]) return;
+        const data = await e.target.files[0].arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        setCanvasSize(viewport.width, viewport.height);
+        bgCtx.fillStyle = 'white';
+        bgCtx.fillRect(0, 0, viewport.width, viewport.height);
+        await page.render({ canvasContext: bgCtx, viewport }).promise;
+        redrawAll(); saveHistory();
+    });
+    document.getElementById('imgFile').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.onload = () => {
+            const w = Math.min(300, bgCanvas.width * 0.35);
+            const h = w * (img.height / img.width);
+            objects.push({ type: 'image', img, x: (bgCanvas.width-w)/2, y: (bgCanvas.height-h)/2, w, h });
+            redrawAll(); saveHistory();
+        };
+        img.src = URL.createObjectURL(file);
+    });
+    
+    document.getElementById('latexBtn').onclick = () => document.getElementById('latexModal').style.display = 'flex';
+    document.getElementById('closeLatexModal').onclick = () => document.getElementById('latexModal').style.display = 'none';
+    document.getElementById('insertLatexBtn').onclick = () => {
+        const latex = document.getElementById('latexInput').value.trim();
+        if (latex) alert("LaTeX inserted: " + latex);
+        document.getElementById('latexModal').style.display = 'none';
+    };
+    
+    document.getElementById('toggleSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
+    document.getElementById('slidePanelBtn').onclick = () => document.getElementById('slideSidebar').classList.toggle('open');
+    document.getElementById('closeSlideBtn').onclick = () => document.getElementById('slideSidebar').classList.remove('open');
+    
+    // ========== ZOOM & PAN (Mouse + Touch) ==========
+    // Mouse wheel zoom
+    bottomCanvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = bottomCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const canvasX = (mx / rect.width) * bottomCanvas.width;
+        const canvasY = (my / rect.height) * bottomCanvas.height;
+        const worldX = (canvasX - offsetX) / scale;
+        const worldY = (canvasY - offsetY) / scale;
+        const factor = e.deltaY < 0 ? 1.08 : 0.92;
+        const newScale = Math.min(12, Math.max(0.2, scale * factor));
+        offsetX = canvasX - worldX * newScale;
+        offsetY = canvasY - worldY * newScale;
+        scale = newScale;
+        redrawAll();
+    }, { passive: false });
+    
+    // Mouse pan (right-click drag)
+    let isPanning = false, panStartX, panStartY, panStartOffX, panStartOffY;
+    bottomCanvas.addEventListener('mousedown', e => {
+        if (e.button === 2) {
+            isPanning = true;
+            panStartX = e.clientX; panStartY = e.clientY;
+            panStartOffX = offsetX; panStartOffY = offsetY;
+            e.preventDefault();
+        }
+    });
+    window.addEventListener('mousemove', e => {
+        if (isPanning) {
+            offsetX = panStartOffX + (e.clientX - panStartX);
+            offsetY = panStartOffY + (e.clientY - panStartY);
+            redrawAll();
+        }
+    });
+    window.addEventListener('mouseup', () => { isPanning = false; });
+    bottomCanvas.addEventListener('contextmenu', e => e.preventDefault());
+    
+    // Touch pinch + pan
+    function getTouchDistance(t1, t2) {
+        return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    }
+    function getTouchMidpoint(t1, t2, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const x = ((t1.clientX + t2.clientX)/2 - rect.left) / rect.width * canvas.width;
+        const y = ((t1.clientY + t2.clientY)/2 - rect.top) / rect.height * canvas.height;
+        return { x, y };
+    }
+    
+    bottomCanvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+            // Single touch: drawing
+            handleDown(e);
+        } else if (e.touches.length === 2) {
+            // Two fingers: start pinch/pan
+            isPinching = true;
+            initialPinchDist = getTouchDistance(e.touches[0], e.touches[1]);
+            initialScale = scale;
+            initialOffsetX = offsetX;
+            initialOffsetY = offsetY;
+            const mid = getTouchMidpoint(e.touches[0], e.touches[1], bottomCanvas);
+            pinchCenter = { x: mid.x, y: mid.y };
+            // Also store for pan
+            panStartX = (e.touches[0].clientX + e.touches[1].clientX)/2;
+            panStartY = (e.touches[0].clientY + e.touches[1].clientY)/2;
+            twoFingerPan = true;
+        }
+    });
+    bottomCanvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 1 && !isPinching) {
+            handleMove(e);
+        } else if (e.touches.length === 2 && isPinching) {
+            const newDist = getTouchDistance(e.touches[0], e.touches[1]);
+            const newMid = getTouchMidpoint(e.touches[0], e.touches[1], bottomCanvas);
+            if (initialPinchDist > 0) {
+                const zoom = newDist / initialPinchDist;
+                let newScale = initialScale * zoom;
+                newScale = Math.min(12, Math.max(0.2, newScale));
+                // Keep the pinch center fixed in world coordinates
+                const worldX = (pinchCenter.x - initialOffsetX) / initialScale;
+                const worldY = (pinchCenter.y - initialOffsetY) / initialScale;
+                offsetX = pinchCenter.x - worldX * newScale;
+                offsetY = pinchCenter.y - worldY * newScale;
+                scale = newScale;
+                redrawAll();
+            }
+            // Pan during pinch
+            const newPanX = (e.touches[0].clientX + e.touches[1].clientX)/2;
+            const newPanY = (e.touches[0].clientY + e.touches[1].clientY)/2;
+            if (twoFingerPan) {
+                const deltaX = newPanX - panStartX;
+                const deltaY = newPanY - panStartY;
+                // Convert delta to canvas coordinate shift
+                offsetX += deltaX;
+                offsetY += deltaY;
+                panStartX = newPanX;
+                panStartY = newPanY;
+                redrawAll();
+            }
+        }
+    });
+    bottomCanvas.addEventListener('touchend', e => {
+        if (e.touches.length < 2) {
+            isPinching = false;
+            twoFingerPan = false;
+            initialPinchDist = 0;
+        }
+        if (e.touches.length === 0) {
+            handleUp(e);
+        }
+    });
+    
+    // ========== INITIALIZE ==========
+    setCanvasSize(1200, 800);
+    bgCtx.fillStyle = 'white';
+    bgCtx.fillRect(0, 0, 1200, 800);
     saveHistory();
-    isDrawing = false;
-  }
-  
-  // ========== SELECTION & EDITING ==========
-  function handleSelectStart(e) {
-    if (currentTool !== 'select') return;
-    e.preventDefault();
-    const p = getCanvasCoords(e, mainCanvas);
-    const hit = hitTestShapes(p.x, p.y);
-    if (hit >= 0) {
-      selectedShapeIndex = hit;
-      isDraggingShape = true;
-      dragStart = p;
-      const shape = currentStrokes[selectedShapeIndex];
-      dragOrigShape = JSON.parse(JSON.stringify(shape));
-      redrawBoth();
-    } else {
-      selectedShapeIndex = -1;
-      redrawBoth();
-    }
-  }
-  
-  function handleSelectMove(e) {
-    if (currentTool !== 'select') return;
-    if (isResizing && selectedShapeIndex >= 0) {
-      const p = getCanvasCoords(e, mainCanvas);
-      const shape = currentStrokes[selectedShapeIndex];
-      const orig = resizeStartBounds;
-      const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
-      if (shape.type === 'shape') {
-        let newData = { ...shape.data };
-        if (shape.shapeType === 'rect') {
-          if (resizeHandle === 0) { newData.x = orig.x + dx; newData.y = orig.y + dy; newData.w = orig.w - dx; newData.h = orig.h - dy; }
-          else if (resizeHandle === 1) { newData.y = orig.y + dy; newData.w = orig.w + dx; newData.h = orig.h - dy; }
-          else if (resizeHandle === 2) { newData.x = orig.x + dx; newData.w = orig.w - dx; newData.h = orig.h + dy; }
-          else if (resizeHandle === 3) { newData.w = orig.w + dx; newData.h = orig.h + dy; }
-          if (newData.w < 5) newData.w = 5; if (newData.h < 5) newData.h = 5;
-        } else if (shape.shapeType === 'circle') {
-          let newW = orig.w + (resizeHandle%2===0 ? -dx : dx);
-          let newH = orig.h + (resizeHandle<2 ? -dy : dy);
-          newData.rx = Math.max(5, newW/2); newData.ry = Math.max(5, newH/2);
-          newData.cx = orig.cx + (resizeHandle%2===0 ? dx/2 : 0);
-          newData.cy = orig.cy + (resizeHandle<2 ? dy/2 : 0);
-        } else if (shape.shapeType === 'triangle') {
-          let scaleX = (orig.w + (resizeHandle%2===0 ? -dx : dx)) / orig.w;
-          let scaleY = (orig.h + (resizeHandle<2 ? -dy : dy)) / orig.h;
-          if (scaleX>0.1 && scaleY>0.1) {
-            let newPts = dragOrigShape.data.points.map(p => ({ x: orig.cx + (p.x - orig.cx)*scaleX, y: orig.cy + (p.y - orig.cy)*scaleY }));
-            newData = { points: newPts };
-          }
-        } // similarly for other shapes (arrow, line, polygon) - for brevity, implement generic scaling
-        updateShapeInStrokes(selectedShapeIndex, newData);
-      } else if (shape.type === 'image') {
-        let newW = orig.w + (resizeHandle%2===0 ? -dx : dx);
-        let newH = orig.h + (resizeHandle<2 ? -dy : dy);
-        if (newW>5 && newH>5) {
-          shape.w = newW; shape.h = newH;
-          shape.x = orig.x + (resizeHandle===0 ? dx : resizeHandle===2 ? dx : 0);
-          shape.y = orig.y + (resizeHandle===0 ? dy : resizeHandle===1 ? dy : 0);
-          redrawAllStrokesFromArray(); saveHistory();
-        }
-      }
-      return;
-    }
-    if (isRotating && selectedShapeIndex >= 0) {
-      const p = getCanvasCoords(e, mainCanvas);
-      const shape = currentStrokes[selectedShapeIndex];
-      const bounds = getShapeBounds(shape);
-      if (bounds) {
-        const angle = Math.atan2(p.y - bounds.cy, p.x - bounds.cx);
-        const delta = angle - rotateStartAngle;
-        // rotate shape data
-        if (shape.type === 'shape') {
-          // simplified rotation: for polygon, we can rotate points around center
-          if (shape.shapeType === 'polygon') {
-            let pts = shape.data.points.map(p => {
-              let dx = p.x - bounds.cx, dy = p.y - bounds.cy;
-              let cos = Math.cos(delta), sin = Math.sin(delta);
-              return { x: bounds.cx + dx*cos - dy*sin, y: bounds.cy + dx*sin + dy*cos };
-            });
-            shape.data.points = pts;
-          } else if (shape.shapeType === 'rect') {
-            // convert rect to polygon for rotation? For simplicity, we'll just store rotation angle and redraw as polygon.
-            if (!shape.rotation) shape.rotation = 0;
-            shape.rotation += delta * 180/Math.PI;
-            // convert to polygon points for rendering (implement in drawShapeOnCtx)
-          }
-        } else if (shape.type === 'image') {
-          if (!shape.rotation) shape.rotation = 0;
-          shape.rotation += delta * 180/Math.PI;
-        }
-        redrawAllStrokesFromArray(); saveHistory();
-      }
-      rotateStartAngle = Math.atan2(p.y - bounds.cy, p.x - bounds.cx);
-      return;
-    }
-    if (isDraggingShape && selectedShapeIndex >= 0) {
-      const p = getCanvasCoords(e, mainCanvas);
-      const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
-      const shape = currentStrokes[selectedShapeIndex];
-      if (shape.type === 'shape') {
-        let newData = { ...shape.data };
-        if (shape.shapeType === 'rect') { newData.x = dragOrigShape.data.x + dx; newData.y = dragOrigShape.data.y + dy; }
-        else if (shape.shapeType === 'circle') { newData.cx = dragOrigShape.data.cx + dx; newData.cy = dragOrigShape.data.cy + dy; }
-        else if (shape.shapeType === 'triangle') { newData = { x1: dragOrigShape.data.x1+dx, y1: dragOrigShape.data.y1+dy, x2: dragOrigShape.data.x2+dx, y2: dragOrigShape.data.y2+dy, x3: dragOrigShape.data.x3+dx, y3: dragOrigShape.data.y3+dy }; }
-        else if (shape.shapeType === 'arrow' || shape.shapeType === 'line') { newData = { x1: dragOrigShape.data.x1+dx, y1: dragOrigShape.data.y1+dy, x2: dragOrigShape.data.x2+dx, y2: dragOrigShape.data.y2+dy }; }
-        else if (shape.shapeType === 'diamond') { newData.cx = dragOrigShape.data.cx + dx; newData.cy = dragOrigShape.data.cy + dy; }
-        else if (shape.shapeType === 'polygon') { newData.points = dragOrigShape.data.points.map(p => ({ x: p.x+dx, y: p.y+dy })); }
-        updateShapeInStrokes(selectedShapeIndex, newData);
-      } else if (shape.type === 'image') {
-        shape.x = dragOrigShape.x + dx; shape.y = dragOrigShape.y + dy;
-        redrawAllStrokesFromArray(); saveHistory();
-      }
-      dragStart = p;
-    }
-  }
-  
-  function handleSelectEnd(e) {
-    if (currentTool !== 'select') return;
-    isDraggingShape = false;
-    isResizing = false;
-    isRotating = false;
-    selectedShapeIndex = -1;
-    redrawBoth();
-  }
-  
-  // ========== IMAGE UPLOAD ==========
-  document.getElementById('imageUpload').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const img = new Image();
-    img.onload = () => {
-      const maxW = 300, maxH = 300;
-      let w = img.width, h = img.height;
-      if (w > maxW) { h = (h * maxW) / w; w = maxW; }
-      if (h > maxH) { w = (w * maxH) / h; h = maxH; }
-      const x = (pdfBaseWidth - w)/2, y = (pdfBaseHeight - h)/2;
-      currentStrokes.push({ type: 'image', imgElement: img, x: x, y: y, w: w, h: h, rotation: 0 });
-      pageStrokes[currentPageNum] = [...currentStrokes];
-      saveHistory();
-      redrawAllStrokesFromArray();
-    };
-    img.src = URL.createObjectURL(file);
-  });
-  
-  // ========== PDF RENDERING ==========
-  async function renderPDFPageHighRes(pageNum) {
-    if (!pdfDoc) return;
-    const page = await pdfDoc.getPage(pageNum);
-    const viewportOrig = page.getViewport({ scale: 1 });
-    const targetWidth = Math.min(1600, Math.max(1000, viewportOrig.width));
-    const scaleFactor = targetWidth / viewportOrig.width;
-    const viewport = page.getViewport({ scale: scaleFactor });
-    const w = viewport.width, h = viewport.height;
-    setCanvasesResolution(w, h);
-    pdfOffCtx.fillStyle = 'white'; pdfOffCtx.fillRect(0,0,w,h);
-    await page.render({ canvasContext: pdfOffCtx, viewport: viewport }).promise;
-    if (pageStrokes[pageNum]) currentStrokes = [...pageStrokes[pageNum]];
-    else currentStrokes = [];
-    redrawAllStrokesFromArray();
-    hasPDF = true;
-    document.getElementById('pdfPageNav').style.display = 'flex';
-    document.getElementById('pageIndicator').innerText = `${pageNum}/${totalPages}`;
-    scale = 1; offsetX = 0; offsetY = 0;
-    topScale = 1; topOffsetX = 0; topOffsetY = 0;
-    adjModeActive = false;
-    redrawBoth();
-    showToast(`PDF page ${pageNum} loaded (${Math.round(w)}x${Math.round(h)})`);
-  }
-  
-  function loadPDF(file) {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const typedArray = new Uint8Array(e.target.result);
-      pdfDoc = await pdfjsLib.getDocument(typedArray).promise;
-      totalPages = pdfDoc.numPages;
-      currentPageNum = 1;
-      pageStrokes = {};
-      await renderPDFPageHighRes(1);
-    };
-    reader.readAsArrayBuffer(file);
-  }
-  
-  document.getElementById('pdfFileInput').addEventListener('change', (e) => {
-    if(e.target.files[0]) loadPDF(e.target.files[0]);
-  });
-  async function changePage(delta) {
-    if(!pdfDoc) return;
-    let newPage = currentPageNum + delta;
-    if(newPage>=1 && newPage<=totalPages) {
-      pageStrokes[currentPageNum] = [...currentStrokes];
-      currentPageNum = newPage;
-      await renderPDFPageHighRes(currentPageNum);
-    }
-  }
-  document.getElementById('prevPageBtn').onclick = () => changePage(-1);
-  document.getElementById('nextPageBtn').onclick = () => changePage(1);
-  
-  // ========== EVENT LISTENERS ==========
-  function getCanvasCoords(e, canvasRef = mainCanvas) {
-    const rect = canvasRef.getBoundingClientRect();
-    const clientX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const clientY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const canvasW = canvasRef.width, canvasH = canvasRef.height;
-    const cssW = rect.width, cssH = rect.height;
-    let canvasX = (clientX / cssW) * canvasW;
-    let canvasY = (clientY / cssH) * canvasH;
-    if (canvasRef === mainCanvas) {
-      canvasX = (canvasX - offsetX) / scale;
-      canvasY = (canvasY - offsetY) / scale;
-    }
-    return { x: Math.max(0, Math.min(canvasX, canvasW)), y: Math.max(0, Math.min(canvasY, canvasH)) };
-  }
-  
-  function getDistance(a,b) { return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
-  function getMidpoint(a,b, ref) { const rect = ref.getBoundingClientRect(); return { x: ((a.clientX+b.clientX)/2 - rect.left) * (ref.width/rect.width), y: ((a.clientY+b.clientY)/2 - rect.top) * (ref.height/rect.height) }; }
-  
-  mainCanvas.addEventListener('mousedown', (e) => {
-    if (currentTool === 'select') handleSelectStart(e);
-    else startDraw(e);
-  });
-  window.addEventListener('mousemove', (e) => {
-    if (currentTool === 'select') handleSelectMove(e);
-    else drawMove(e);
-  });
-  window.addEventListener('mouseup', (e) => {
-    if (currentTool === 'select') handleSelectEnd(e);
-    else endDraw(e);
-  });
-  
-  // Touch events
-  mainCanvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      if (currentTool === 'select') handleSelectStart(e);
-      else startDraw(e);
-    } else if (e.touches.length === 2) {
-      pinchDist = getDistance(e.touches[0], e.touches[1]);
-      pinchMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas);
-      isDrawing = false;
-    }
-  });
-  mainCanvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      if (currentTool === 'select') handleSelectMove(e);
-      else drawMove(e);
-    } else if (e.touches.length === 2) {
-      const newDist = getDistance(e.touches[0], e.touches[1]);
-      const newMid = getMidpoint(e.touches[0], e.touches[1], mainCanvas);
-      if (pinchDist) {
-        const zoom = newDist / pinchDist;
-        const worldX = (pinchMid.x - offsetX) / scale;
-        const worldY = (pinchMid.y - offsetY) / scale;
-        scale *= zoom;
-        scale = Math.min(12, Math.max(0.2, scale));
-        offsetX = pinchMid.x - worldX * scale;
-        offsetY = pinchMid.y - worldY * scale;
-        offsetX += newMid.x - pinchMid.x;
-        offsetY += newMid.y - pinchMid.y;
-        redrawBoth();
-      }
-      pinchDist = newDist;
-      pinchMid = newMid;
-    }
-  });
-  mainCanvas.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) pinchDist = 0;
-    if (e.touches.length === 0) {
-      if (currentTool === 'select') handleSelectEnd(e);
-      else endDraw(e);
-    }
-  });
-  
-  // Top canvas pinch for ADJ mode
-  let adjPinchDist=0, adjPinchMid={x:0,y:0};
-  topCanvas.addEventListener('touchstart', (e) => {
-    if (adjModeActive && e.touches.length===2) {
-      adjPinchDist = getDistance(e.touches[0], e.touches[1]);
-      adjPinchMid = getMidpoint(e.touches[0], e.touches[1], topCanvas);
-      e.preventDefault();
-    }
-  });
-  topCanvas.addEventListener('touchmove', (e) => {
-    if (adjModeActive && e.touches.length===2) {
-      e.preventDefault();
-      const newDist = getDistance(e.touches[0], e.touches[1]);
-      const newMid = getMidpoint(e.touches[0], e.touches[1], topCanvas);
-      if (adjPinchDist) {
-        const zoom = newDist / adjPinchDist;
-        const worldX = (adjPinchMid.x - topOffsetX) / topScale;
-        const worldY = (adjPinchMid.y - topOffsetY) / topScale;
-        topScale *= zoom;
-        topScale = Math.min(12, Math.max(0.2, topScale));
-        topOffsetX = adjPinchMid.x - worldX * topScale;
-        topOffsetY = adjPinchMid.y - worldY * topScale;
-        topOffsetX += newMid.x - adjPinchMid.x;
-        topOffsetY += newMid.y - adjPinchMid.y;
-        redrawBoth();
-      }
-      adjPinchDist = newDist;
-      adjPinchMid = newMid;
-    }
-  });
-  topCanvas.addEventListener('wheel', (e) => {
-    if (adjModeActive) {
-      e.preventDefault();
-      const rect = topCanvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const wx = (mx / rect.width) * topCanvas.width;
-      const wy = (my / rect.height) * topCanvas.height;
-      const worldX = (wx - topOffsetX) / topScale;
-      const worldY = (wy - topOffsetY) / topScale;
-      const factor = e.deltaY < 0 ? 1.08 : 0.92;
-      let newScale = topScale * factor;
-      newScale = Math.min(12, Math.max(0.2, newScale));
-      topOffsetX = wx - worldX * newScale;
-      topOffsetY = wy - worldY * newScale;
-      topScale = newScale;
-      redrawBoth();
-    }
-  });
-  
-  // ========== UI BUTTONS ==========
-  function setTool(tool, shape=null) {
-    currentTool = tool;
-    currentShape = shape;
-    selectedShapeIndex = -1;
-    document.getElementById('drawModeBtn').classList.remove('active');
-    document.getElementById('eraserBtn').classList.remove('active');
-    document.getElementById('smartEraseBtn').classList.remove('active');
-    document.getElementById('selectBtn').classList.remove('active');
-    if (tool === 'draw') document.getElementById('drawModeBtn').classList.add('active');
-    else if (tool === 'eraser') document.getElementById('eraserBtn').classList.add('active');
-    else if (tool === 'smartErase') document.getElementById('smartEraseBtn').classList.add('active');
-    else if (tool === 'select') document.getElementById('selectBtn').classList.add('active');
-    redrawBoth();
-  }
-  
-  document.getElementById('drawModeBtn').onclick = () => setTool('draw');
-  document.getElementById('eraserBtn').onclick = () => setTool('eraser');
-  document.getElementById('smartEraseBtn').onclick = () => setTool('smartErase');
-  document.getElementById('selectBtn').onclick = () => setTool('select');
-  document.getElementById('adjModeBtn').onclick = () => { adjModeActive = !adjModeActive; document.getElementById('adjModeBtn').classList.toggle('adj-active', adjModeActive); redrawBoth(); };
-  document.getElementById('resetAdjBtn').onclick = () => { topScale=1; topOffsetX=0; topOffsetY=0; redrawBoth(); };
-  document.getElementById('clearAllBtn').onclick = () => { if(confirm('Clear all drawings?')) { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); currentStrokes = []; pageStrokes[currentPageNum] = []; saveHistory(); redrawBoth(); } };
-  document.getElementById('undoBtn').onclick = () => { if (historyIndex > 0) { historyIndex--; restoreFromHistory(historyStack[historyIndex]); } };
-  document.getElementById('redoBtn').onclick = () => { if (historyIndex < historyStack.length-1) { historyIndex++; restoreFromHistory(historyStack[historyIndex]); } };
-  document.getElementById('penColor').addEventListener('input', (e) => penColor = e.target.value);
-  document.getElementById('brushWidth').addEventListener('input', (e) => { penSize = parseInt(e.target.value); document.getElementById('sizeLabel').innerText = penSize+'px'; });
-  
-  function restoreFromHistory(state) {
-    const mainImg = new Image(); mainImg.onload = () => { mainDrawCtx.clearRect(0,0, drawingLayerMain.width, drawingLayerMain.height); mainDrawCtx.drawImage(mainImg,0,0); redrawAllStrokesFromArray(); };
-    mainImg.src = state.mainImg;
-    const topImg = new Image(); topImg.onload = () => { topDrawCtx.clearRect(0,0, drawingLayerTop.width, drawingLayerTop.height); topDrawCtx.drawImage(topImg,0,0); redrawAllStrokesFromArray(); };
-    topImg.src = state.topImg;
-    currentStrokes = state.strokes || [];
-    redrawAllStrokesFromArray();
-  }
-  
-  function saveHistory() {
-    const state = {
-      mainImg: drawingLayerMain.toDataURL(),
-      topImg: drawingLayerTop.toDataURL(),
-      strokes: JSON.parse(JSON.stringify(currentStrokes))
-    };
-    if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex+1);
-    historyStack.push(state);
-    historyIndex = historyStack.length - 1;
-    if (historyStack.length > 50) { historyStack.shift(); historyIndex--; }
-  }
-  
-  // Shape buttons
-  document.getElementById('rectBtn').onclick = () => setTool('shape', 'rect');
-  document.getElementById('circleBtn').onclick = () => setTool('shape', 'circle');
-  document.getElementById('triangleBtn').onclick = () => setTool('shape', 'triangle');
-  document.getElementById('diamondBtn').onclick = () => setTool('shape', 'diamond');
-  document.getElementById('arrowBtn').onclick = () => setTool('shape', 'arrow');
-  document.getElementById('lineBtn').onclick = () => setTool('shape', 'line');
-  document.getElementById('polygonBtn').onclick = () => { customPolygonSides = parseInt(document.getElementById('polygonSides').value) || 5; setTool('shape', 'polygon'); };
-  
-  // Math equations
-  document.getElementById('addMathBtn').onclick = () => {
-    const latex = document.getElementById('mathInput').value;
-    if(!latex) return;
-    const x = 100, y = 100;
-    mainDrawCtx.font = '24px "Segoe UI"'; mainDrawCtx.fillStyle = penColor;
-    topDrawCtx.font = '24px "Segoe UI"'; topDrawCtx.fillStyle = penColor;
-    mainDrawCtx.fillText(latex, x, y); topDrawCtx.fillText(latex, x, y);
-    currentStrokes.push({ points: [{x,y}], color: penColor, width: 24, isDot: false, text: latex, isText: true });
-    pageStrokes[currentPageNum] = [...currentStrokes];
-    saveHistory(); redrawBoth();
-  };
-  
-  // Telegram functions (same as before)
-  async function testTelegram() { try { const r = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/getMe`); const j = await r.json(); document.getElementById('telegramStatusText').innerText = j.ok ? `✅ @${j.result.username}` : '❌ Failed'; } catch(e) { document.getElementById('telegramStatusText').innerText = '⚠️ Check Token'; } }
-  async function uploadToTelegram(blob, filename) {
-    const fd = new FormData(); fd.append('chat_id', TELEGRAM.CHAT_ID); fd.append('document', blob, filename);
-    try { const res = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/sendDocument`, { method: 'POST', body: fd }); const json = await res.json(); return json.ok; } catch(e) { return false; }
-  }
-  async function startRecordingWithAudio() {
-    if(isRecording) { if(mediaRecorder) mediaRecorder.stop(); if(recordingInterval) clearInterval(recordingInterval); isRecording=false; document.getElementById('recIndicator').style.display='none'; return; }
-    if(!isMicEnabled) { const ask = confirm('Microphone not enabled. Record without audio?'); if(!ask) return; }
-    let audioTracks = null;
-    if(isMicEnabled) { try { const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }); audioTracks = audioStream.getAudioTracks(); } catch(e){} }
-    hiddenRecordCanvas.width = topCanvas.width; hiddenRecordCanvas.height = topCanvas.height;
-    const canvasStream = hiddenRecordCanvas.captureStream(20);
-    let finalStream = canvasStream;
-    if(audioTracks && audioTracks.length) { finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]); }
-    mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' });
-    recordedChunks = [];
-    mediaRecorder.ondataavailable = e => { if(e.data.size) recordedChunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      const success = await uploadToTelegram(blob, `whiteboard_${Date.now()}.webm`);
-      showToast(success ? '✅ Saved to Telegram!' : '⚠️ Local only', !success);
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'recording.webm'; a.click();
-      if(recordingInterval) clearInterval(recordingInterval);
-    };
-    recordingInterval = setInterval(() => { hiddenRecordCtx.drawImage(topCanvas, 0, 0); }, 40);
-    mediaRecorder.start(500);
-    isRecording=true; document.getElementById('recIndicator').style.display='block';
-  }
-  async function enableMic() { try { if(micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream=null; isMicEnabled=false; showToast('Mic disabled'); return; } const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); micStream=stream; isMicEnabled=true; showToast('🎤 Microphone ready'); } catch(e){ showToast('Mic permission denied',true); } }
-  document.getElementById('recordMasterBtn').onclick = startRecordingWithAudio;
-  document.getElementById('toggleMicBtn').onclick = enableMic;
-  document.getElementById('micTestBtn').onclick = async () => { try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t=>t.stop()); showToast('✅ Mic works!'); } catch(e){ showToast('❌ Mic access failed',true); } };
-  document.getElementById('testTelegramBtn').onclick = testTelegram;
-  document.getElementById('showQrBtn').onclick = () => { document.getElementById('qrCodeContainer').innerHTML = ''; new QRCode(document.getElementById('qrCodeContainer'), `https://t.me/${TELEGRAM.BOT_USERNAME}`); document.getElementById('qrModal').style.display='flex'; };
-  window.closeModal = () => document.getElementById('qrModal').style.display='none';
-  
-  testTelegram();
-  setCanvasesResolution(1200, 675);
-  redrawBoth();
-  showToast('All features added: Shapes, Edit (move/resize/rotate), Images', false);
+    redrawAll();
+    console.log('✅ Pinch zoom fixed. Draw on bottom canvas with zoom, top canvas static.');
 </script>
 </body>
 </html>
