@@ -3,25 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: none">
-    <title>Whiteboard – Fixed Pinch Zoom + Stable Shapes</title>
+    <title>Whiteboard Pro – Tablet Working | Shapes + Polygon + Vertex Edit</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
         :root {
-            --bg: #1a1a2e; --surface: #16213e; --surface2: #0f3460; --accent: #e94560;
-            --accent2: #533483; --text: #fff; --canvas-bg: #2d2d44; --card-bg: #1e1e2f;
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --surface2: #0f3460;
+            --accent: #e94560;
+            --accent2: #533483;
+            --text: #fff;
+            --canvas-bg: #2d2d44;
+            --card-bg: #1e1e2f;
             --radius: 14px;
         }
         body.light {
-            --bg: #f0f2f5; --surface: #ffffff; --surface2: #e9ecef; --accent: #e94560;
-            --accent2: #6c5ce7; --text: #1a1a2e; --canvas-bg: #e8ecf1; --card-bg: #fff;
+            --bg: #f0f2f5;
+            --surface: #ffffff;
+            --surface2: #e9ecef;
+            --accent: #e94560;
+            --accent2: #6c5ce7;
+            --text: #1a1a2e;
+            --canvas-bg: #e8ecf1;
+            --card-bg: #fff;
         }
-        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
         body {
-            margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg); height: 100vh; display: flex; flex-direction: column;
-            overflow: hidden; transition: background 0.3s, color 0.3s; color: var(--text);
-            padding: 4px; gap: 4px;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: var(--text);
+            padding: 4px;
+            gap: 4px;
             touch-action: none;
         }
         .middle-toolbar {
@@ -48,10 +70,19 @@
         }
         button, .file-label {
             background: var(--accent);
-            border: none; padding: 8px 16px; border-radius: 25px;
-            color: white; font-weight: 600; cursor: pointer; font-size: 13px;
-            transition: 0.1s; display: inline-flex; align-items: center; gap: 4px;
-            white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 25px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.1s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             min-height: 44px;
         }
         button:active { transform: scale(0.96); opacity: 0.8; }
@@ -66,26 +97,52 @@
         .color-swatch:active { transform: scale(1.1); }
         .main-layout { display: flex; flex-direction: column; flex: 1; gap: 4px; min-height: 0; }
         .canvas-card {
-            background: var(--card-bg); border-radius: var(--radius); display: flex;
-            flex-direction: column; overflow: hidden; flex: 1; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex: 1;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
         }
         .card-header { padding: 8px 12px; background: var(--accent2); color: white; font-weight: bold; font-size: 12px; }
         .canvas-container {
-            position: relative; flex: 1; background: var(--canvas-bg);
-            overflow: hidden; touch-action: none;
+            position: relative;
+            flex: 1;
+            background: var(--canvas-bg);
+            overflow: hidden;
+            touch-action: none;
         }
         canvas {
-            display: block; background: white; cursor: crosshair;
-            width: 100%; height: 100%;
+            display: block;
+            background: white;
+            cursor: crosshair;
+            width: 100%;
+            height: 100%;
         }
         .status {
-            position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: white;
-            padding: 6px 12px; border-radius: 20px; font-size: 11px; pointer-events: none; z-index: 5;
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            pointer-events: none;
+            z-index: 5;
         }
         .slide-sidebar {
-            position: fixed; right: -360px; top: 0; width: 320px; height: 100vh;
-            background: var(--surface); box-shadow: -2px 0 25px rgba(0,0,0,0.4);
-            transition: right 0.3s; z-index: 1500; border-radius: 14px 0 0 14px;
+            position: fixed;
+            right: -360px;
+            top: 0;
+            width: 320px;
+            height: 100vh;
+            background: var(--surface);
+            box-shadow: -2px 0 25px rgba(0,0,0,0.4);
+            transition: right 0.3s;
+            z-index: 1500;
+            border-radius: 14px 0 0 14px;
         }
         .slide-sidebar.open { right: 0; }
         .slide-title { background: var(--accent); padding: 16px; color: white; display: flex; justify-content: space-between; }
@@ -94,19 +151,44 @@
         .slide-item { background: var(--surface2); border-radius: 12px; padding: 14px; margin-bottom: 8px; cursor: pointer; }
         .slide-item.active { background: var(--accent); }
         .toggle-slide-btn {
-            position: fixed; right: 16px; bottom: 24px; background: var(--accent); border: none;
-            color: white; width: 56px; height: 56px; border-radius: 50%; font-size: 24px;
-            cursor: pointer; z-index: 1600; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            position: fixed;
+            right: 16px;
+            bottom: 24px;
+            background: var(--accent);
+            border: none;
+            color: white;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1600;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
         }
         .recording-indicator {
-            position: fixed; top: 10px; right: 10px; background: #e74c3c; color: white;
-            padding: 6px 14px; border-radius: 25px; font-size: 12px; animation: pulse 1s infinite;
-            display: none; z-index: 2000;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 25px;
+            font-size: 12px;
+            animation: pulse 1s infinite;
+            display: none;
+            z-index: 2000;
         }
         @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
         .info-banner {
-            position: fixed; bottom: 20px; left: 20px; background: #2c3e50; color: #ffd700;
-            padding: 8px 16px; border-radius: 25px; font-size: 11px; z-index: 1600;
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #2c3e50;
+            color: #ffd700;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 11px;
+            z-index: 1600;
             pointer-events: none;
         }
         .polygon-input-group { display: flex; gap: 6px; align-items: center; background: var(--surface2); padding: 4px 12px; border-radius: 30px; }
@@ -180,7 +262,7 @@
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ CANVAS (Two Finger Pinch Zoom | Two Finger Pan | One Finger Draw)</div>
+        <div class="card-header">✍️ CANVAS (Two Finger Pinch Zoom | Two Finger Pan | One Finger Draw/Shape)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
             <div class="status" id="bottomStatus">Zoom: 1.0x | Mode: Draw</div>
@@ -258,7 +340,6 @@
     let initialScale = 1;
     let initialOffsetX = 0, initialOffsetY = 0;
     let pinchCenterX = 0, pinchCenterY = 0;
-    let activeTouches = [];
 
     let mediaRecorder = null, recordedChunks = [], isRecording = false;
 
@@ -557,7 +638,7 @@
     function handleStart(e) {
         e.preventDefault();
         
-        // Pinch zoom handling - store initial state
+        // Pinch zoom handling
         if (e.touches && e.touches.length === 2) {
             const rect = bottomCanvas.getBoundingClientRect();
             const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -574,10 +655,9 @@
             return;
         }
         
-        // For single touch, get coordinates
         const p = getCanvasCoords(e);
 
-        // Vertex edit mode
+        // Vertex edit mode - check vertex hit
         if (vertexEditEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             const obj = objects[selectedObjectIndex];
             const vertexIdx = hitTestVertex(obj, p.x, p.y);
@@ -823,7 +903,6 @@
     }
 
     function handleEnd(e) {
-        // Reset pinch zoom
         if (e.touches && e.touches.length < 2) {
             initialPinchDist = 0;
         }
@@ -1090,7 +1169,7 @@
         redrawAll();
     }, { passive: false });
 
-    // Mouse pan
+    // Mouse pan (right click drag)
     let mousePanning = false, mousePanStart = { x: 0, y: 0 }, mousePanStartOffset = { x: 0, y: 0 };
     bottomCanvas.addEventListener('mousedown', (e) => {
         if (e.button === 2) {
@@ -1110,13 +1189,13 @@
     window.addEventListener('mouseup', () => { mousePanning = false; });
     bottomCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Touch events for drawing and pinch zoom
+    // Touch events
     bottomCanvas.addEventListener('touchstart', handleStart, { passive: false });
     bottomCanvas.addEventListener('touchmove', handleMove, { passive: false });
     bottomCanvas.addEventListener('touchend', handleEnd);
     bottomCanvas.addEventListener('touchcancel', handleEnd);
 
-    // Mouse events for drawing
+    // Mouse events
     bottomCanvas.addEventListener('mousedown', handleStart);
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleEnd);
@@ -1128,7 +1207,7 @@
     bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
     saveHistory();
     redrawAll();
-    console.log('✅ Fixed! Pinch zoom working, shapes stable!');
+    console.log('✅ Tablet whiteboard ready! Shapes working, pinch zoom working!');
 </script>
 </body>
 </html>
