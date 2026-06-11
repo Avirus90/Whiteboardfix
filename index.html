@@ -1,1883 +1,1034 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Whiteboard - Dual Canvas</title>
-
-    <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js">
-    </script>
-    <!-- MathJax for LaTeX -->
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
-    </script>
-
-    <style>
-        :root {
-            --bg: #1a1d23;
-            --surface: #252830;
-            --surface2: #2d3039;
-            --surface3: #353942;
-            --text: #e1e3e8;
-            --text2: #b0b3bb;
-            --accent: #5b8af7;
-            --accent2: #7c5cfc;
-            --danger: #f55a5a;
-            --warning: #f0a050;
-            --success: #4caf84;
-            --border: #3a3d47;
-            --radius: 10px;
-            --radius-sm: 6px;
-            --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
-            background: #111318;
-            color: var(--text);
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* ── TOP TOOLBAR ── */
-        #toolbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 14px;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            z-index: 100;
-            flex-wrap: wrap;
-            min-height: 50px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-        }
-        #toolbar .sep {
-            width: 1px;
-            height: 28px;
-            background: var(--border);
-            margin: 0 4px;
-            border-radius: 1px;
-        }
-        #toolbar button,
-        #toolbar .tool-group button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            padding: 7px 12px;
-            border-radius: var(--radius-sm);
-            border: 1px solid transparent;
-            background: var(--surface2);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            white-space: nowrap;
-            transition: var(--transition);
-            position: relative;
-            letter-spacing: 0.01em;
-        }
-        #toolbar button:hover {
-            background: var(--surface3);
-            border-color: #555;
-        }
-        #toolbar button.active {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #fff;
-            box-shadow: 0 0 14px rgba(91, 138, 247, 0.35);
-        }
-        #toolbar button.danger-active {
-            background: var(--danger);
-            border-color: var(--danger);
-            color: #fff;
-            box-shadow: 0 0 14px rgba(245, 90, 90, 0.35);
-        }
-        #toolbar button.recording {
-            background: #e53935;
-            border-color: #e53935;
-            color: #fff;
-            animation: pulse-rec 1.2s infinite;
-        }
-        @keyframes pulse-rec {
-            0%,
-            100% {
-                box-shadow: 0 0 8px rgba(229, 57, 53, 0.5);
-            }
-            50% {
-                box-shadow: 0 0 24px rgba(229, 57, 53, 0.9);
-            }
-        }
-        #toolbar input[type="color"] {
-            width: 34px;
-            height: 30px;
-            border: 2px solid var(--border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            background: var(--surface2);
-            padding: 2px;
-            transition: var(--transition);
-        }
-        #toolbar input[type="color"]:hover {
-            border-color: #888;
-        }
-        #toolbar input[type="range"] {
-            width: 80px;
-            accent-color: var(--accent);
-            cursor: pointer;
-        }
-        #toolbar select {
-            padding: 7px 10px;
-            border-radius: var(--radius-sm);
-            background: var(--surface2);
-            color: var(--text);
-            border: 1px solid var(--border);
-            font-size: 13px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: var(--transition);
-        }
-        #toolbar select:hover {
-            border-color: #777;
-        }
-        .tool-label {
-            font-size: 11px;
-            color: var(--text2);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin: 0 2px;
-        }
-
-        /* ── MAIN CONTENT ── */
-        #main-content {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            overflow: hidden;
-            gap: 0;
-        }
-
-        /* ── TOP CANVAS AREA ── */
-        #top-canvas-container {
-            position: relative;
-            flex: 1;
-            min-height: 0;
-            background: #1c1f26;
-            border-bottom: 2px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-        #top-canvas-wrap {
-            position: relative;
-            box-shadow: var(--shadow);
-            border-radius: 4px;
-            overflow: hidden;
-            background: #fff;
-        }
-        #topCanvas {
-            display: block;
-            cursor: crosshair;
-        }
-        #viewport-indicator {
-            position: absolute;
-            border: 2px dashed rgba(255, 180, 50, 0.7);
-            background: rgba(255, 180, 50, 0.08);
-            pointer-events: none;
-            border-radius: 3px;
-            z-index: 10;
-        }
-
-        /* ── PDF SLIDER ── */
-        #pdf-slider-panel {
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            padding: 8px 12px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            overflow-x: auto;
-            min-height: 90px;
-            flex-shrink: 0;
-        }
-        #pdf-slider-panel .slider-label {
-            font-size: 11px;
-            color: var(--text2);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            flex-shrink: 0;
-        }
-        #pdf-thumbnails {
-            display: flex;
-            gap: 8px;
-            flex-shrink: 0;
-        }
-        #pdf-thumbnails .thumb {
-            width: 70px;
-            height: 50px;
-            border-radius: 4px;
-            border: 2px solid transparent;
-            cursor: pointer;
-            overflow: hidden;
-            background: #fff;
-            flex-shrink: 0;
-            transition: var(--transition);
-            position: relative;
-        }
-        #pdf-thumbnails .thumb:hover {
-            border-color: #888;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-        }
-        #pdf-thumbnails .thumb.active {
-            border-color: var(--accent);
-            box-shadow: 0 0 16px rgba(91, 138, 247, 0.45);
-            transform: translateY(-2px);
-        }
-        #pdf-thumbnails .thumb canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-        #pdf-thumbnails .thumb .page-num {
-            position: absolute;
-            bottom: 2px;
-            right: 4px;
-            font-size: 9px;
-            background: rgba(0, 0, 0, 0.65);
-            color: #fff;
-            padding: 1px 5px;
-            border-radius: 3px;
-            font-weight: 600;
-        }
-
-        /* ── BOTTOM CANVAS AREA ── */
-        #bottom-canvas-container {
-            position: relative;
-            height: 38%;
-            min-height: 200px;
-            background: #1a1d22;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            border-top: 2px solid var(--border);
-        }
-        #bottom-canvas-wrap {
-            position: relative;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-            border-radius: 4px;
-            overflow: hidden;
-            background: #fdfdfd;
-            cursor: grab;
-        }
-        #bottom-canvas-wrap:active {
-            cursor: grabbing;
-        }
-        #bottom-canvas-wrap.drawing-mode {
-            cursor: crosshair;
-        }
-        #bottomCanvas {
-            display: block;
-        }
-
-        /* ── MODAL ── */
-        #modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 999;
-            display: none;
-            align-items: center;
-            justify-content: center;
-        }
-        #modal-overlay.show {
-            display: flex;
-        }
-        #modal-box {
-            background: var(--surface);
-            border-radius: var(--radius);
-            padding: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-            border: 1px solid var(--border);
-            width: 500px;
-            max-width: 95vw;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-        #modal-box h3 {
-            font-size: 16px;
-            color: var(--text);
-            margin: 0;
-        }
-        #modal-box textarea {
-            width: 100%;
-            height: 100px;
-            background: var(--surface2);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 12px;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 14px;
-            resize: vertical;
-        }
-        #modal-box .modal-btns {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-        #modal-box button {
-            padding: 9px 20px;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 13px;
-            background: var(--surface2);
-            color: var(--text);
-            transition: var(--transition);
-        }
-        #modal-box button.primary {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #fff;
-        }
-        #modal-box button.primary:hover {
-            opacity: 0.85;
-        }
-
-        /* ── TOAST ── */
-        #toast {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--surface3);
-            color: #fff;
-            padding: 10px 22px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-            z-index: 1000;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-        }
-        #toast.show {
-            opacity: 1;
-        }
-
-        /* Scrollbar styling */
-        ::-webkit-scrollbar {
-            height: 6px;
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #555;
-            border-radius: 3px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Pro Whiteboard • Dual Canvas + PDF + LaTeX</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      background: #0b0f17;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    :root {
+      --bg: #111827;
+      --surface: #1c2436;
+      --accent: #3b82f6;
+      --accent2: #8b5cf6;
+      --danger: #ef4444;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --border: #2d3a52;
+      --radius: 12px;
+    }
+    /* ── TOOLBAR ── */
+    #toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(18, 25, 45, 0.85);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+      z-index: 50;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+    .tool-group {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .tool-btn {
+      background: #1e293b;
+      border: 1px solid transparent;
+      color: #cbd5e1;
+      padding: 8px 14px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tool-btn.active {
+      background: var(--accent);
+      border-color: #90b4ff;
+      color: white;
+      box-shadow: 0 0 14px rgba(59,130,246,0.5);
+    }
+    .tool-btn.danger-active {
+      background: var(--danger);
+      border-color: #f87171;
+      color: white;
+    }
+    .tool-btn:hover {
+      background: #334155;
+    }
+    .color-swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 20px;
+      cursor: pointer;
+      border: 2px solid white;
+    }
+    input[type="range"] {
+      width: 70px;
+      accent-color: var(--accent);
+    }
+    select {
+      background: #1e293b;
+      color: white;
+      border: 1px solid #3b4b66;
+      border-radius: 20px;
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+    .sep {
+      width: 1px;
+      height: 24px;
+      background: #334155;
+      margin: 0 6px;
+    }
+    /* ── BOARDS ── */
+    #boards-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+      overflow: hidden;
+    }
+    .top-board {
+      flex: 1;
+      background: #1a1f2e;
+      border-radius: 22px;
+      border: 1px solid rgba(59,130,246,0.3);
+      overflow: hidden;
+      position: relative;
+    }
+    .bottom-board {
+      flex: 1.5;
+      background: #0f1322;
+      border-radius: 22px;
+      border: 1px solid rgba(139,92,246,0.3);
+      overflow: hidden;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #topCanvas {
+      cursor: default;
+    }
+    #bottomCanvas {
+      touch-action: none;
+    }
+    /* PDF slider */
+    #pdf-slider {
+      background: #101624;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow-x: auto;
+      border-bottom: 1px solid #2a3456;
+    }
+    .thumb {
+      width: 64px;
+      height: 44px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      overflow: hidden;
+      background: white;
+      flex-shrink: 0;
+    }
+    .thumb.active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 16px #3b82f680;
+    }
+    .thumb canvas {
+      width: 100%;
+      height: 100%;
+    }
+    /* LaTeX modal */
+    #latex-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    #latex-modal.show {
+      display: flex;
+    }
+    .modal-box {
+      background: #1e293b;
+      padding: 24px;
+      border-radius: 20px;
+      width: 420px;
+      border: 1px solid #3b4b66;
+    }
+    textarea {
+      width: 100%;
+      background: #0f172a;
+      color: white;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: monospace;
+      resize: vertical;
+    }
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      color: white;
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-size: 13px;
+      z-index: 300;
+      opacity: 0;
+      transition: 0.3s;
+    }
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
 </head>
 <body>
-
-    <!-- ── TOOLBAR ── -->
-    <div id="toolbar">
-        <!-- Pen tools -->
-        <span class="tool-label">✏️ Pen</span>
-        <button id="btn-pen" class="active" title="Pen Tool (P)">🖊 Pen</button>
-        <input type="color" id="pen-color" value="#1a1a1a" title="Pen Color">
-        <input type="range" id="pen-size" min="1" max="20" value="3" title="Pen Size">
-        <span id="pen-size-label" style="font-size:12px;min-width:24px;">3px</span>
-
-        <span class="sep"></span>
-
-        <!-- Erase modes -->
-        <span class="tool-label">🧹 Erase</span>
-        <button id="btn-eraser-normal" title="Normal Erase">🧽 Normal</button>
-        <button id="btn-eraser-stroke" title="Stroke Erase (click a stroke)">✂️ Stroke</button>
-        <button id="btn-clear-all" title="Clear All Annotations">🗑 Clear All</button>
-
-        <span class="sep"></span>
-
-        <!-- Shapes -->
-        <span class="tool-label">⬜ Shapes</span>
-        <button id="btn-shape-rect" title="Rectangle">▭ Rect</button>
-        <button id="btn-shape-circle" title="Circle">○ Circle</button>
-        <button id="btn-shape-triangle" title="Triangle">△ Tri</button>
-        <button id="btn-shape-line" title="Line">╱ Line</button>
-        <button id="btn-shape-arrow" title="Arrow">→ Arrow</button>
-
-        <span class="sep"></span>
-
-        <!-- Edit mode -->
-        <button id="btn-edit-mode" title="Edit Mode - Move/Resize/Rotate shapes & images">🔧 Edit Mode</button>
-
-        <span class="sep"></span>
-
-        <!-- Image & LaTeX -->
-        <button id="btn-add-image" title="Add Image">🖼 Image</button>
-        <button id="btn-latex" title="Add LaTeX Equation">📐 LaTeX</button>
-
-        <span class="sep"></span>
-
-        <!-- Voice Record -->
-        <button id="btn-record" title="Toggle Voice Recording">🎤 Record</button>
-        <span id="record-status" style="font-size:11px;color:var(--text2);">Off</span>
-
-        <span class="sep"></span>
-
-        <!-- PDF Upload -->
-        <button id="btn-upload-pdf" title="Upload PDF (16:9 ratio recommended)">📄 Upload PDF</button>
-        <input type="file" id="pdf-file-input" accept=".pdf" style="display:none;">
-        <button id="btn-remove-pdf" title="Remove PDF Background" style="display:none;">✕ Remove PDF</button>
-        <span id="pdf-page-info" style="font-size:11px;color:var(--text2);"></span>
+  <!-- TOOLBAR -->
+  <div id="toolbar">
+    <div class="tool-group">
+      <button class="tool-btn active" id="btn-pen">✒️ Pen</button>
+      <button class="tool-btn" id="btn-eraser">🧹 Eraser</button>
+      <button class="tool-btn" id="btn-stroke-eraser">✂️ Stroke Erase</button>
+      <button class="tool-btn" id="btn-pan">🤚 Pan</button>
+      <button class="tool-btn" id="btn-edit">🔧 Edit</button>
     </div>
+    <div class="sep"></div>
+    <input type="color" id="penColor" value="#1e293b">
+    <input type="range" id="penSize" min="1" max="15" value="3">
+    <span style="color:#cbd5e1; font-size:12px;" id="sizeLabel">3px</span>
+    <div class="sep"></div>
+    <button class="tool-btn" id="btn-undo">↩ Undo</button>
+    <button class="tool-btn" id="btn-redo">↪ Redo</button>
+    <button class="tool-btn" id="btn-clear">🗑 Clear</button>
+    <div class="sep"></div>
+    <button class="tool-btn" id="btn-shape-rect">▭ Rect</button>
+    <button class="tool-btn" id="btn-shape-circle">○ Circle</button>
+    <button class="tool-btn" id="btn-image">🖼 Image</button>
+    <button class="tool-btn" id="btn-latex">📐 LaTeX</button>
+    <div class="sep"></div>
+    <button class="tool-btn" id="btn-record">🎤 Rec</button>
+    <span style="color:#94a3b8; font-size:11px;" id="recStatus">Off</span>
+    <button class="tool-btn" id="btn-pdf-upload">📄 PDF</button>
+    <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
+  </div>
 
-    <!-- ── MAIN CONTENT ── -->
-    <div id="main-content">
-        <!-- Top Canvas -->
-        <div id="top-canvas-container">
-            <div id="top-canvas-wrap">
-                <canvas id="topCanvas"></canvas>
-                <div id="viewport-indicator"></div>
-            </div>
-        </div>
+  <!-- PDF THUMBNAIL SLIDER -->
+  <div id="pdf-slider" style="display:none;"></div>
 
-        <!-- PDF Slider -->
-        <div id="pdf-slider-panel" style="display:none;">
-            <span class="slider-label">📑 PDF Pages</span>
-            <div id="pdf-thumbnails"></div>
-        </div>
-
-        <!-- Bottom Canvas -->
-        <div id="bottom-canvas-container">
-            <div id="bottom-canvas-wrap" class="drawing-mode">
-                <canvas id="bottomCanvas"></canvas>
-            </div>
-        </div>
+  <!-- BOARDS -->
+  <div id="boards-container">
+    <div class="top-board">
+      <canvas id="topCanvas"></canvas>
     </div>
-
-    <!-- ── LATEX MODAL ── -->
-    <div id="modal-overlay">
-        <div id="modal-box">
-            <h3>📐 Enter LaTeX Equation</h3>
-            <textarea id="latex-input" placeholder="e.g.: \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"></textarea>
-            <div id="latex-preview" style="min-height:40px;color:var(--text);padding:8px;background:var(--surface2);border-radius:4px;text-align:center;"></div>
-            <div class="modal-btns">
-                <button id="btn-latex-cancel">Cancel</button>
-                <button id="btn-latex-insert" class="primary">Insert Equation</button>
-            </div>
-        </div>
+    <div class="bottom-board">
+      <canvas id="bottomCanvas"></canvas>
     </div>
+  </div>
 
-    <!-- Toast -->
-    <div id="toast"></div>
+  <!-- LATEX MODAL -->
+  <div id="latex-modal">
+    <div class="modal-box">
+      <h3 style="color:white;">Enter LaTeX Equation</h3>
+      <textarea id="latexInput" rows="3" placeholder="e.g. \frac{-b\pm\sqrt{b^2-4ac}}{2a}"></textarea>
+      <div id="latexPreview" style="min-height:40px; margin:10px 0; color:white;"></div>
+      <button class="tool-btn" id="latexInsert">Insert</button>
+      <button class="tool-btn" id="latexCancel">Cancel</button>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
 
-    <script>
-        (function() {
-            // ──────────────────────────────────────
-            // DOM REFS
-            // ──────────────────────────────────────
-            const topCanvas = document.getElementById('topCanvas');
-            const topCtx = topCanvas.getContext('2d');
-            const bottomCanvas = document.getElementById('bottomCanvas');
-            const bottomCtx = bottomCanvas.getContext('2d');
-            const topWrap = document.getElementById('top-canvas-wrap');
-            const bottomWrap = document.getElementById('bottom-canvas-wrap');
-            const viewportIndicator = document.getElementById('viewport-indicator');
-            const pdfSliderPanel = document.getElementById('pdf-slider-panel');
-            const pdfThumbnails = document.getElementById('pdf-thumbnails');
-            const pdfPageInfo = document.getElementById('pdf-page-info');
-            const toast = document.getElementById('toast');
-            const modalOverlay = document.getElementById('modal-overlay');
-            const latexInput = document.getElementById('latex-input');
-            const latexPreview = document.getElementById('latex-preview');
-            const recordStatus = document.getElementById('record-status');
+  <script>
+    (function() {
+      // ──────────────────────────────────────
+      // CANVAS & STATE
+      // ──────────────────────────────────────
+      const topCanvas = document.getElementById('topCanvas');
+      const topCtx = topCanvas.getContext('2d');
+      const bottomCanvas = document.getElementById('bottomCanvas');
+      const bottomCtx = bottomCanvas.getContext('2d');
 
-            // ──────────────────────────────────────
-            // STATE
-            // ──────────────────────────────────────
-            const DEFAULT_WIDTH = 1280;
-            const DEFAULT_HEIGHT = 720; // 16:9
-            let topW = DEFAULT_WIDTH;
-            let topH = DEFAULT_HEIGHT;
+      const PDF_RATIO = 16/9;
+      const BASE_WIDTH = 1280;
+      const BASE_HEIGHT = 720;
+      let topW = BASE_WIDTH, topH = BASE_HEIGHT;
+      let bottomW, bottomH;
 
-            // Bottom canvas size (same aspect, but fits container)
-            let bottomW, bottomH;
+      // View transform for bottom canvas
+      let zoom = 2.5;
+      let panX = 0, panY = 0;
+      let isPanning = false;
+      let panStartMouse = {x:0,y:0};
+      let panStartPan = {x:0,y:0};
 
-            // Content storage (in top-canvas coordinates)
-            let strokes = []; // {points:[{x,y,t}], color, size, type:'pen'}
-            let shapes = []; // {id, type:'rect'|'circle'|'triangle'|'line'|'arrow', x, y, w, h, rotation, color, fill, vertices, selected:bool}
-            let images = []; // {id, imgElement, x, y, w, h, rotation, selected:bool}
-            let latexItems = []; // {id, svgString, x, y, w, h, rotation, selected:bool}
+      // Content storage (world coordinates, same as top canvas)
+      let strokes = [];          // {id, type:'pen'|'eraser', points:[{x,y}], color, size}
+      let shapes = [];          // {id, type:'rect'|'circle', x,y,w,h, rotation, color, fill, selected}
+      let images = [];          // {id, img, x,y,w,h, rotation, selected}
+      let latexItems = [];      // {id, cachedImg, x,y,w,h, rotation, selected}
+      let nextId = 1;
 
-            let currentTool = 'pen'; // 'pen' | 'eraser-normal' | 'eraser-stroke' | 'shape-rect' | 'shape-circle' | 'shape-triangle' | 'shape-line' | 'shape-arrow' | 'edit'
-            let editMode = false;
-            let penColor = '#1a1a1a';
-            let penSize = 3;
-            let eraseSize = 20;
+      // Undo/redo full state snapshots
+      const MAX_HISTORY = 50;
+      let undoStack = [];
+      let redoStack = [];
 
-            // PDF state
-            let pdfDoc = null;
-            let pdfPages = [];
-            let currentPdfPage = 0; // 0-indexed
-            let pdfBackgroundImage = null; // Image element for current page
+      // Tool state
+      let currentTool = 'pen';   // pen | eraser | strokeEraser | pan | edit | shape-rect | shape-circle
+      let editMode = false;
+      let penColor = '#1e293b';
+      let penSize = 3;
+      let eraserSize = 20;
+      let isDrawing = false;
+      let currentStroke = null;
 
-            // Bottom canvas viewport (in top-canvas coords)
-            let bottomZoom = 2.5;
-            let bottomPanX = 0;
-            let bottomPanY = 0;
-            let isPanning = false;
-            let panStart = { x: 0, y: 0 };
-            let panStartPan = { x: 0, y: 0 };
+      // Edit mode selection & manipulation
+      let selectedItem = null;   // {type:'shape'|'image'|'latex', index}
+      let editDragMode = null;   // 'move' | 'resize' | 'rotate'
+      let editStart = {x:0,y:0};
+      let editItemStart = null;
 
-            // Drawing state
-            let isDrawing = false;
-            let currentStroke = null;
-            let drawingOnBottom = false;
+      // PDF
+      let pdfDoc = null;
+      let pdfPages = [];
+      let currentPdfPage = 0;
+      let pdfBgImage = null;
 
-            // Shape drawing state
-            let shapeStart = null;
-            let drawingShape = null;
+      // Voice
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let isRecording = false;
 
-            // Voice recording
-            let mediaRecorder = null;
-            let audioChunks = [];
-            let isRecording = false;
+      // Pinch zoom
+      let initialPinchDist = 0;
+      let initialZoom = 0;
+      let initialPan = {x:0,y:0};
 
-            // Edit mode - selected item
-            let selectedItem = null; // {type:'shape'|'image'|'latex', index:number}
-            let editDragMode = null; // 'move' | 'resize' | 'rotate'
-            let editDragStart = null;
-            let editResizeCorner = null;
+      // ──────────────────────────────────────
+      // INITIALIZATION
+      // ──────────────────────────────────────
+      function resizeCanvases() {
+        const topContainer = topCanvas.parentElement;
+        const bottomContainer = bottomCanvas.parentElement;
+        const topRect = topContainer.getBoundingClientRect();
+        const bottomRect = bottomContainer.getBoundingClientRect();
+        topW = topRect.width;
+        topH = topRect.height;
+        topCanvas.width = topW;
+        topCanvas.height = topH;
 
-            // ID counters
-            let shapeIdCounter = 0;
-            let imageIdCounter = 0;
-            let latexIdCounter = 0;
+        const ratio = topW / topH;
+        if (bottomRect.width / bottomRect.height > ratio) {
+          bottomH = Math.floor(bottomRect.height * 0.9);
+          bottomW = Math.floor(bottomH * ratio);
+        } else {
+          bottomW = Math.floor(bottomRect.width * 0.9);
+          bottomH = Math.floor(bottomW / ratio);
+        }
+        bottomW = Math.max(bottomW, 400);
+        bottomH = Math.max(bottomH, 200);
+        bottomCanvas.width = bottomW;
+        bottomCanvas.height = bottomH;
+        clampPan();
+        renderAll();
+      }
 
-            // ──────────────────────────────────────
-            // INITIALIZATION
-            // ──────────────────────────────────────
-            function initCanvases() {
-                topCanvas.width = topW;
-                topCanvas.height = topH;
-                topCanvas.style.width = '100%';
-                topCanvas.style.height = '100%';
-                topCanvas.style.maxWidth = topW + 'px';
-                topCanvas.style.maxHeight = topH + 'px';
+      function clampPan() {
+        const viewW = bottomW / zoom;
+        const viewH = bottomH / zoom;
+        panX = Math.min(0, Math.max(-topW + viewW, panX));
+        panY = Math.min(0, Math.max(-topH + viewH, panY));
+        if (viewW >= topW) panX = (topW - viewW) / 2;
+        if (viewH >= topH) panY = (topH - viewH) / 2;
+      }
 
-                // Bottom canvas matches top ratio but sized to fit
-                const containerH = document.getElementById('bottom-canvas-container').clientHeight;
-                const containerW = document.getElementById('bottom-canvas-container').clientWidth;
-                const ratio = topW / topH;
-                if (containerW / containerH > ratio) {
-                    bottomH = Math.floor(containerH * 0.85);
-                    bottomW = Math.floor(bottomH * ratio);
-                } else {
-                    bottomW = Math.floor(containerW * 0.85);
-                    bottomH = Math.floor(bottomW / ratio);
-                }
-                bottomW = Math.max(bottomW, 400);
-                bottomH = Math.max(bottomH, 225);
-                bottomCanvas.width = bottomW;
-                bottomCanvas.height = bottomH;
-                bottomCanvas.style.width = bottomW + 'px';
-                bottomCanvas.style.height = bottomH + 'px';
+      window.addEventListener('resize', resizeCanvases);
+      resizeCanvases();
 
-                // Reset pan to center
-                bottomPanX = 0;
-                bottomPanY = 0;
-                bottomZoom = 2.5;
-                clampPan();
-                updateViewportIndicator();
-                renderAll();
+      // ──────────────────────────────────────
+      // HISTORY MANAGEMENT
+      // ──────────────────────────────────────
+      function saveState() {
+        const state = {
+          strokes: JSON.parse(JSON.stringify(strokes)),
+          shapes: JSON.parse(JSON.stringify(shapes)),
+          images: images.map(img => ({...img, imgElement: null})), // img element not serializable
+          latexItems: JSON.parse(JSON.stringify(latexItems)),
+        };
+        undoStack.push(state);
+        if (undoStack.length > MAX_HISTORY) undoStack.shift();
+        redoStack = [];
+      }
+
+      function undo() {
+        if (undoStack.length === 0) return;
+        redoStack.push({
+          strokes: JSON.parse(JSON.stringify(strokes)),
+          shapes: JSON.parse(JSON.stringify(shapes)),
+          images: images.map(img => ({...img, imgElement: null})),
+          latexItems: JSON.parse(JSON.stringify(latexItems)),
+        });
+        const prev = undoStack.pop();
+        strokes = prev.strokes;
+        shapes = prev.shapes;
+        // Restore images (keep imgElement references)
+        const imgMap = new Map(images.map(img => [img.id, img.imgElement]));
+        images = prev.images.map(p => ({...p, imgElement: imgMap.get(p.id)}));
+        latexItems = prev.latexItems;
+        renderAll();
+      }
+
+      function redo() {
+        if (redoStack.length === 0) return;
+        undoStack.push({
+          strokes: JSON.parse(JSON.stringify(strokes)),
+          shapes: JSON.parse(JSON.stringify(shapes)),
+          images: images.map(img => ({...img, imgElement: null})),
+          latexItems: JSON.parse(JSON.stringify(latexItems)),
+        });
+        const next = redoStack.pop();
+        strokes = next.strokes;
+        shapes = next.shapes;
+        const imgMap = new Map(images.map(img => [img.id, img.imgElement]));
+        images = next.images.map(p => ({...p, imgElement: imgMap.get(p.id)}));
+        latexItems = next.latexItems;
+        renderAll();
+      }
+
+      // ──────────────────────────────────────
+      // RENDERING
+      // ──────────────────────────────────────
+      function renderAll() {
+        renderTop();
+        renderBottom();
+      }
+
+      function renderTop() {
+        topCtx.clearRect(0, 0, topW, topH);
+        topCtx.fillStyle = '#ffffff';
+        topCtx.fillRect(0, 0, topW, topH);
+        if (pdfBgImage) topCtx.drawImage(pdfBgImage, 0, 0, topW, topH);
+        drawContent(topCtx, 1, 0, 0);
+      }
+
+      function renderBottom() {
+        bottomCtx.clearRect(0, 0, bottomW, bottomH);
+        bottomCtx.fillStyle = '#ffffff';
+        bottomCtx.fillRect(0, 0, bottomW, bottomH);
+        // Apply transform
+        bottomCtx.save();
+        bottomCtx.translate(panX, panY);
+        bottomCtx.scale(zoom, zoom);
+        if (pdfBgImage) {
+          bottomCtx.globalAlpha = 0.6;
+          bottomCtx.drawImage(pdfBgImage, 0, 0, topW, topH);
+          bottomCtx.globalAlpha = 1;
+        }
+        drawContent(bottomCtx, zoom, panX, panY);
+        bottomCtx.restore();
+        // Grid overlay (bottom canvas space)
+        drawGrid();
+        // Viewport border
+        bottomCtx.strokeStyle = '#aaa';
+        bottomCtx.lineWidth = 1.5;
+        bottomCtx.strokeRect(0, 0, topW, topH);
+      }
+
+      function drawContent(ctx, scale, panX, panY) {
+        // Strokes
+        for (const s of strokes) {
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          if (s.type === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.strokeStyle = 'rgba(0,0,0,1)';
+          } else {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = s.color;
+          }
+          ctx.lineWidth = s.size;
+          if (s.points.length >= 2) {
+            ctx.beginPath();
+            ctx.moveTo(s.points[0].x, s.points[0].y);
+            for (let i = 1; i < s.points.length; i++) {
+              const prev = s.points[i-1];
+              const curr = s.points[i];
+              const midX = (prev.x + curr.x) / 2;
+              const midY = (prev.y + curr.y) / 2;
+              ctx.quadraticCurveTo(prev.x, prev.y, midX, midY);
             }
-
-            function clampPan() {
-                const viewW = bottomW / bottomZoom;
-                const viewH = bottomH / bottomZoom;
-                bottomPanX = Math.max(0, Math.min(topW - viewW, bottomPanX));
-                bottomPanY = Math.max(0, Math.min(topH - viewH, bottomPanY));
-                if (viewW >= topW) bottomPanX = (topW - viewW) / 2;
-                if (viewH >= topH) bottomPanY = (topH - viewH) / 2;
-            }
-
-            // ──────────────────────────────────────
-            // RENDERING
-            // ──────────────────────────────────────
-            function renderAll() {
-                renderTopCanvas();
-                renderBottomCanvas();
-                updateViewportIndicator();
-            }
-
-            function renderTopCanvas() {
-                const ctx = topCtx;
-                ctx.clearRect(0, 0, topW, topH);
-
-                // White background
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, topW, topH);
-
-                // PDF background
-                if (pdfBackgroundImage) {
-                    ctx.drawImage(pdfBackgroundImage, 0, 0, topW, topH);
-                }
-
-                // Draw strokes
-                for (const stroke of strokes) {
-                    if (stroke.type === 'erase-stroke') continue; // handled differently
-                    ctx.save();
-                    ctx.globalAlpha = stroke.type === 'eraser-normal' ? 1 : 1;
-                    if (stroke.type === 'eraser-normal') {
-                        ctx.globalCompositeOperation = 'destination-out';
-                        ctx.strokeStyle = 'rgba(0,0,0,1)';
-                    } else {
-                        ctx.globalCompositeOperation = 'source-over';
-                        ctx.strokeStyle = stroke.color;
-                    }
-                    ctx.lineWidth = stroke.size;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    if (stroke.points.length >= 2) {
-                        ctx.beginPath();
-                        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-                        for (let i = 1; i < stroke.points.length; i++) {
-                            const cp = stroke.points[i];
-                            if (cp && stroke.points[i - 1]) {
-                                const midx = (stroke.points[i - 1].x + cp.x) / 2;
-                                const midy = (stroke.points[i - 1].y + cp.y) / 2;
-                                ctx.quadraticCurveTo(stroke.points[i - 1].x, stroke.points[i - 1].y, midx, midy);
-                            }
-                        }
-                        if (stroke.points.length > 1) {
-                            const last = stroke.points[stroke.points.length - 1];
-                            ctx.lineTo(last.x, last.y);
-                        }
-                        ctx.stroke();
-                    } else if (stroke.points.length === 1) {
-                        ctx.beginPath();
-                        ctx.arc(stroke.points[0].x, stroke.points[0].y, stroke.size / 2, 0, Math.PI * 2);
-                        ctx.fillStyle = stroke.type === 'eraser-normal' ? 'rgba(0,0,0,1)' : stroke.color;
-                        ctx.fill();
-                    }
-                    ctx.restore();
-                }
-
-                // Draw shapes
-                for (const shape of shapes) {
-                    ctx.save();
-                    const cx = shape.x + shape.w / 2;
-                    const cy = shape.y + shape.h / 2;
-                    ctx.translate(cx, cy);
-                    ctx.rotate((shape.rotation || 0) * Math.PI / 180);
-                    ctx.translate(-cx, -cy);
-
-                    ctx.strokeStyle = shape.color || '#1a1a1a';
-                    ctx.fillStyle = shape.fill || 'transparent';
-                    ctx.lineWidth = 2.5;
-                    ctx.lineJoin = 'round';
-
-                    switch (shape.type) {
-                        case 'rect':
-                            ctx.beginPath();
-                            ctx.roundRect(shape.x, shape.y, shape.w, shape.h, 4);
-                            ctx.fill();
-                            ctx.stroke();
-                            break;
-                        case 'circle':
-                            ctx.beginPath();
-                            ctx.ellipse(cx, cy, shape.w / 2, shape.h / 2, 0, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.stroke();
-                            break;
-                        case 'triangle':
-                            ctx.beginPath();
-                            ctx.moveTo(cx, shape.y);
-                            ctx.lineTo(shape.x + shape.w, shape.y + shape.h);
-                            ctx.lineTo(shape.x, shape.y + shape.h);
-                            ctx.closePath();
-                            ctx.fill();
-                            ctx.stroke();
-                            break;
-                        case 'line':
-                            ctx.beginPath();
-                            ctx.moveTo(shape.x, shape.y);
-                            ctx.lineTo(shape.x + shape.w, shape.y + shape.h);
-                            ctx.stroke();
-                            break;
-                        case 'arrow':
-                            ctx.beginPath();
-                            ctx.moveTo(shape.x, shape.y);
-                            ctx.lineTo(shape.x + shape.w, shape.y + shape.h);
-                            ctx.stroke();
-                            // Arrowhead
-                            const angle = Math.atan2(shape.h, shape.w);
-                            const arrowLen = 15;
-                            const ax = shape.x + shape.w - arrowLen * Math.cos(angle);
-                            const ay = shape.y + shape.h - arrowLen * Math.sin(angle);
-                            ctx.beginPath();
-                            ctx.moveTo(shape.x + shape.w, shape.y + shape.h);
-                            ctx.lineTo(ax - arrowLen * 0.5 * Math.cos(angle - 0.8), ay - arrowLen * 0.5 * Math.sin(
-                                angle - 0.8));
-                            ctx.lineTo(ax - arrowLen * 0.5 * Math.cos(angle + 0.8), ay - arrowLen * 0.5 * Math.sin(
-                                angle + 0.8));
-                            ctx.closePath();
-                            ctx.fillStyle = shape.color || '#1a1a1a';
-                            ctx.fill();
-                            break;
-                    }
-
-                    // Selection highlight
-                    if (shape.selected && editMode) {
-                        ctx.strokeStyle = '#5b8af7';
-                        ctx.lineWidth = 2;
-                        ctx.setLineDash([6, 3]);
-                        ctx.strokeRect(shape.x - 6, shape.y - 6, shape.w + 12, shape.h + 12);
-                        ctx.setLineDash([]);
-                        // Handles
-                        drawHandles(ctx, shape.x - 6, shape.y - 6, shape.w + 12, shape.h + 12);
-                    }
-                    ctx.restore();
-                }
-
-                // Draw images
-                for (const imgData of images) {
-                    ctx.save();
-                    const cx = imgData.x + imgData.w / 2;
-                    const cy = imgData.y + imgData.h / 2;
-                    ctx.translate(cx, cy);
-                    ctx.rotate((imgData.rotation || 0) * Math.PI / 180);
-                    ctx.translate(-cx, -cy);
-                    ctx.drawImage(imgData.imgElement, imgData.x, imgData.y, imgData.w, imgData.h);
-                    if (imgData.selected && editMode) {
-                        ctx.strokeStyle = '#5b8af7';
-                        ctx.lineWidth = 2;
-                        ctx.setLineDash([6, 3]);
-                        ctx.strokeRect(imgData.x - 4, imgData.y - 4, imgData.w + 8, imgData.h + 8);
-                        ctx.setLineDash([]);
-                        drawHandles(ctx, imgData.x - 4, imgData.y - 4, imgData.w + 8, imgData.h + 8);
-                    }
-                    ctx.restore();
-                }
-
-                // Draw LaTeX items
-                for (const lt of latexItems) {
-                    ctx.save();
-                    const cx = lt.x + lt.w / 2;
-                    const cy = lt.y + lt.h / 2;
-                    ctx.translate(cx, cy);
-                    ctx.rotate((lt.rotation || 0) * Math.PI / 180);
-                    ctx.translate(-cx, -cy);
-                    if (lt.cachedImage) {
-                        ctx.drawImage(lt.cachedImage, lt.x, lt.y, lt.w, lt.h);
-                    }
-                    if (lt.selected && editMode) {
-                        ctx.strokeStyle = '#5b8af7';
-                        ctx.lineWidth = 2;
-                        ctx.setLineDash([6, 3]);
-                        ctx.strokeRect(lt.x - 4, lt.y - 4, lt.w + 8, lt.h + 8);
-                        ctx.setLineDash([]);
-                        drawHandles(ctx, lt.x - 4, lt.y - 4, lt.w + 8, lt.h + 8);
-                    }
-                    ctx.restore();
-                }
-
-                // If no PDF, draw subtle border
-                if (!pdfBackgroundImage) {
-                    ctx.strokeStyle = '#ddd';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(0.5, 0.5, topW - 1, topH - 1);
-                }
-            }
-
-            function drawHandles(ctx, x, y, w, h) {
-                const handles = [
-                    { x, y }, { x: x + w, y }, { x, y: y + h }, { x: x + w, y: y + h },
-                    { x: x + w / 2, y }, { x: x + w / 2, y: y + h },
-                    { x, y: y + h / 2 }, { x: x + w, y: y + h / 2 },
-                    { x: x + w / 2, y: y - 16 } // rotation handle
-                ];
-                ctx.fillStyle = '#5b8af7';
-                for (const h of handles) {
-                    ctx.beginPath();
-                    ctx.arc(h.x, h.y, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
-                }
-                // Rotation handle line
-                ctx.beginPath();
-                ctx.moveTo(x + w / 2, y);
-                ctx.lineTo(x + w / 2, y - 16);
-                ctx.strokeStyle = '#5b8af7';
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([]);
-                ctx.stroke();
-            }
-
-            function renderBottomCanvas() {
-                const ctx = bottomCtx;
-                ctx.clearRect(0, 0, bottomW, bottomH);
-
-                // White background
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, bottomW, bottomH);
-
-                // Transform: map top-canvas coords to bottom canvas
-                ctx.save();
-                ctx.scale(bottomZoom, bottomZoom);
-                ctx.translate(-bottomPanX, -bottomPanY);
-
-                // PDF background (faded)
-                if (pdfBackgroundImage) {
-                    ctx.globalAlpha = 0.5;
-                    ctx.drawImage(pdfBackgroundImage, 0, 0, topW, topH);
-                    ctx.globalAlpha = 1;
-                }
-
-                // Draw strokes
-                for (const stroke of strokes) {
-                    if (stroke.type === 'erase-stroke') continue;
-                    ctx.save();
-                    if (stroke.type === 'eraser-normal') {
-                        ctx.globalCompositeOperation = 'destination-out';
-                        ctx.strokeStyle = 'rgba(0,0,0,1)';
-                    } else {
-                        ctx.globalCompositeOperation = 'source-over';
-                        ctx.strokeStyle = stroke.color;
-                    }
-                    ctx.lineWidth = stroke.size;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    if (stroke.points.length >= 2) {
-                        ctx.beginPath();
-                        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-                        for (let i = 1; i < stroke.points.length; i++) {
-                            const cp = stroke.points[i];
-                            if (cp && stroke.points[i - 1]) {
-                                const midx = (stroke.points[i - 1].x + cp.x) / 2;
-                                const midy = (stroke.points[i - 1].y + cp.y) / 2;
-                                ctx.quadraticCurveTo(stroke.points[i - 1].x, stroke.points[i - 1].y, midx, midy);
-                            }
-                        }
-                        if (stroke.points.length > 1) {
-                            const last = stroke.points[stroke.points.length - 1];
-                            ctx.lineTo(last.x, last.y);
-                        }
-                        ctx.stroke();
-                    } else if (stroke.points.length === 1) {
-                        ctx.beginPath();
-                        ctx.arc(stroke.points[0].x, stroke.points[0].y, stroke.size / 2, 0, Math.PI * 2);
-                        ctx.fillStyle = stroke.type === 'eraser-normal' ? 'rgba(0,0,0,1)' : stroke.color;
-                        ctx.fill();
-                    }
-                    ctx.restore();
-                }
-
-                // Draw shapes (faded)
-                ctx.globalAlpha = 0.6;
-                for (const shape of shapes) {
-                    ctx.save();
-                    const cx = shape.x + shape.w / 2;
-                    const cy = shape.y + shape.h / 2;
-                    ctx.translate(cx, cy);
-                    ctx.rotate((shape.rotation || 0) * Math.PI / 180);
-                    ctx.translate(-cx, -cy);
-                    ctx.strokeStyle = shape.color || '#1a1a1a';
-                    ctx.fillStyle = shape.fill || 'transparent';
-                    ctx.lineWidth = 2;
-                    switch (shape.type) {
-                        case 'rect':
-                            ctx.beginPath();
-                            ctx.roundRect(shape.x, shape.y, shape.w, shape.h, 4);
-                            ctx.fill();
-                            ctx.stroke();
-                            break;
-                        case 'circle':
-                            ctx.beginPath();
-                            ctx.ellipse(cx, cy, shape.w / 2, shape.h / 2, 0, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.stroke();
-                            break;
-                        case 'triangle':
-                            ctx.beginPath();
-                            ctx.moveTo(cx, shape.y);
-                            ctx.lineTo(shape.x + shape.w, shape.y + shape.h);
-                            ctx.lineTo(shape.x, shape.y + shape.h);
-                            ctx.closePath();
-                            ctx.fill();
-                            ctx.stroke();
-                            break;
-                        case 'line':
-                        case 'arrow':
-                            ctx.beginPath();
-                            ctx.moveTo(shape.x, shape.y);
-                            ctx.lineTo(shape.x + shape.w, shape.y + shape.h);
-                            ctx.stroke();
-                            break;
-                    }
-                    ctx.restore();
-                }
-                ctx.globalAlpha = 1;
-
-                // Draw images faded
-                ctx.globalAlpha = 0.5;
-                for (const imgData of images) {
-                    ctx.save();
-                    const cx = imgData.x + imgData.w / 2;
-                    const cy = imgData.y + imgData.h / 2;
-                    ctx.translate(cx, cy);
-                    ctx.rotate((imgData.rotation || 0) * Math.PI / 180);
-                    ctx.translate(-cx, -cy);
-                    ctx.drawImage(imgData.imgElement, imgData.x, imgData.y, imgData.w, imgData.h);
-                    ctx.restore();
-                }
-                ctx.globalAlpha = 1;
-
-                ctx.restore();
-
-                // ── GRID (drawn in bottom-canvas pixel space, not transformed) ──
-                drawGrid(ctx, bottomZoom, bottomPanX, bottomPanY);
-
-                // ── Viewport boundary ──
-                ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([8, 4]);
-                ctx.save();
-                ctx.scale(bottomZoom, bottomZoom);
-                ctx.translate(-bottomPanX, -bottomPanY);
-                ctx.strokeRect(0, 0, topW, topH);
-                ctx.setLineDash([]);
-                ctx.restore();
-
-                // Crosshair center
-                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-                ctx.lineWidth = 0.5;
-                ctx.beginPath();
-                ctx.moveTo(bottomW / 2, bottomH / 2 - 30);
-                ctx.lineTo(bottomW / 2, bottomH / 2 + 30);
-                ctx.moveTo(bottomW / 2 - 30, bottomH / 2);
-                ctx.lineTo(bottomW / 2 + 30, bottomH / 2);
-                ctx.stroke();
-            }
-
-            function drawGrid(ctx, zoom, panX, panY) {
-                // Grid spacing in top-canvas units, adapts to zoom
-                let gridSpacing;
-                if (zoom > 4) gridSpacing = 10;
-                else if (zoom > 2) gridSpacing = 20;
-                else if (zoom > 1.2) gridSpacing = 30;
-                else gridSpacing = 50;
-
-                const startX = Math.floor(panX / gridSpacing) * gridSpacing;
-                const startY = Math.floor(panY / gridSpacing) * gridSpacing;
-                const endX = panX + bottomW / zoom;
-                const endY = panY + bottomH / zoom;
-
-                ctx.strokeStyle = 'rgba(180,200,220,0.35)';
-                ctx.lineWidth = 0.5;
-                ctx.beginPath();
-                for (let x = startX; x <= endX; x += gridSpacing) {
-                    const sx = (x - panX) * zoom;
-                    ctx.moveTo(sx, 0);
-                    ctx.lineTo(sx, bottomH);
-                }
-                for (let y = startY; y <= endY; y += gridSpacing) {
-                    const sy = (y - panY) * zoom;
-                    ctx.moveTo(0, sy);
-                    ctx.lineTo(bottomW, sy);
-                }
-                ctx.stroke();
-
-                // Major grid lines
-                const majorSpacing = gridSpacing * 5;
-                const mStartX = Math.floor(panX / majorSpacing) * majorSpacing;
-                const mStartY = Math.floor(panY / majorSpacing) * majorSpacing;
-                ctx.strokeStyle = 'rgba(150,170,200,0.5)';
-                ctx.lineWidth = 0.8;
-                ctx.beginPath();
-                for (let x = mStartX; x <= endX; x += majorSpacing) {
-                    const sx = (x - panX) * zoom;
-                    ctx.moveTo(sx, 0);
-                    ctx.lineTo(sx, bottomH);
-                }
-                for (let y = mStartY; y <= endY; y += majorSpacing) {
-                    const sy = (y - panY) * zoom;
-                    ctx.moveTo(0, sy);
-                    ctx.lineTo(bottomW, sy);
-                }
-                ctx.stroke();
-            }
-
-            function updateViewportIndicator() {
-                const viewW = bottomW / bottomZoom;
-                const viewH = bottomH / bottomZoom;
-                const wrapRect = topWrap.getBoundingClientRect();
-                const canvasDisplayW = wrapRect.width;
-                const canvasDisplayH = wrapRect.height;
-                const scaleX = canvasDisplayW / topW;
-                const scaleY = canvasDisplayH / topH;
-                const scale = Math.min(scaleX, scaleY);
-                const offsetX = (wrapRect.width - topW * scale) / 2;
-                const offsetY = (wrapRect.height - topH * scale) / 2;
-
-                viewportIndicator.style.left = (offsetX + bottomPanX * scale) + 'px';
-                viewportIndicator.style.top = (offsetY + bottomPanY * scale) + 'px';
-                viewportIndicator.style.width = (viewW * scale) + 'px';
-                viewportIndicator.style.height = (viewH * scale) + 'px';
-                viewportIndicator.style.display = 'block';
-            }
-
-            // ──────────────────────────────────────
-            // COORDINATE MAPPING
-            // ──────────────────────────────────────
-            function bottomToTop(bx, by) {
-                return {
-                    x: bx / bottomZoom + bottomPanX,
-                    y: by / bottomZoom + bottomPanY
-                };
-            }
-
-            function getBottomCanvasPos(e) {
-                const rect = bottomCanvas.getBoundingClientRect();
-                return {
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top
-                };
-            }
-
-            function getTopCanvasPos(e) {
-                const rect = topCanvas.getBoundingClientRect();
-                const scaleX = topW / rect.width;
-                const scaleY = topH / rect.height;
-                return {
-                    x: (e.clientX - rect.left) * scaleX,
-                    y: (e.clientY - rect.top) * scaleY
-                };
-            }
-
-            // ──────────────────────────────────────
-            // DRAWING ON BOTTOM CANVAS
-            // ──────────────────────────────────────
-            bottomCanvas.addEventListener('pointerdown', (e) => {
-                if (editMode) {
-                    // In edit mode, check if clicking on an item on bottom canvas
-                    const bp = getBottomCanvasPos(e);
-                    const tp = bottomToTop(bp.x, bp.y);
-                    const hit = hitTestTop(tp.x, tp.y);
-                    if (hit) {
-                        selectItem(hit);
-                        startEditDrag(e, hit);
-                        return;
-                    } else {
-                        deselectAll();
-                    }
-                    // Pan in edit mode
-                    isPanning = true;
-                    panStart = { x: e.clientX, y: e.clientY };
-                    panStartPan = { x: bottomPanX, y: bottomPanY };
-                    bottomWrap.style.cursor = 'grabbing';
-                    return;
-                }
-
-                if (currentTool === 'pen' || currentTool === 'eraser-normal') {
-                    isDrawing = true;
-                    drawingOnBottom = true;
-                    const bp = getBottomCanvasPos(e);
-                    const tp = bottomToTop(bp.x, bp.y);
-                    currentStroke = {
-                        points: [{ x: tp.x, y: tp.y, t: Date.now() }],
-                        color: currentTool === 'eraser-normal' ? '#000' : penColor,
-                        size: currentTool === 'eraser-normal' ? eraseSize : penSize,
-                        type: currentTool === 'eraser-normal' ? 'eraser-normal' : 'pen'
-                    };
-                    strokes.push(currentStroke);
-                    startVoiceRecording();
-                    renderAll();
-                } else if (currentTool === 'eraser-stroke') {
-                    const bp = getBottomCanvasPos(e);
-                    const tp = bottomToTop(bp.x, bp.y);
-                    eraseStrokeAt(tp.x, tp.y);
-                    renderAll();
-                } else if (currentTool.startsWith('shape-')) {
-                    const bp = getBottomCanvasPos(e);
-                    const tp = bottomToTop(bp.x, bp.y);
-                    shapeStart = { x: tp.x, y: tp.y };
-                    drawingShape = {
-                        type: currentTool.replace('shape-', ''),
-                        x: tp.x,
-                        y: tp.y,
-                        w: 0,
-                        h: 0,
-                        rotation: 0,
-                        color: penColor,
-                        fill: 'transparent',
-                        selected: false,
-                        id: 'shape_' + (++shapeIdCounter)
-                    };
-                    shapes.push(drawingShape);
-                    renderAll();
-                }
-            });
-
-            bottomCanvas.addEventListener('pointermove', (e) => {
-                if (isPanning) {
-                    const dx = e.clientX - panStart.x;
-                    const dy = e.clientY - panStart.y;
-                    bottomPanX = panStartPan.x - dx / bottomZoom;
-                    bottomPanY = panStartPan.y - dy / bottomZoom;
-                    clampPan();
-                    renderAll();
-                    return;
-                }
-                if (editDragMode && selectedItem) {
-                    handleEditDrag(e);
-                    return;
-                }
-                if (isDrawing && currentStroke) {
-                    const bp = getBottomCanvasPos(e);
-                    const tp = bottomToTop(bp.x, bp.y);
-                    currentStroke.points.push({ x: tp.x, y: tp.y, t: Date.now() });
-                    renderAll();
-                }
-                if (drawingShape && shapeStart) {
-                    const bp = getBottomCanvasPos(e);
-                    const tp = bottomToTop(bp.x, bp.y);
-                    drawingShape.x = Math.min(shapeStart.x, tp.x);
-                    drawingShape.y = Math.min(shapeStart.y, tp.y);
-                    drawingShape.w = Math.abs(tp.x - shapeStart.x);
-                    drawingShape.h = Math.abs(tp.y - shapeStart.y);
-                    renderAll();
-                }
-            });
-
-            window.addEventListener('pointerup', (e) => {
-                if (isDrawing) {
-                    isDrawing = false;
-                    if (currentStroke && currentStroke.points.length < 2 && currentStroke.type === 'eraser-normal') {
-                        // Single point erase - remove it
-                        strokes.pop();
-                    }
-                    currentStroke = null;
-                    drawingOnBottom = false;
-                    stopVoiceRecording();
-                    renderAll();
-                }
-                if (drawingShape) {
-                    if (drawingShape.w < 5 && drawingShape.h < 5) {
-                        shapes.pop(); // Too small, remove
-                    }
-                    drawingShape = null;
-                    shapeStart = null;
-                    renderAll();
-                }
-                if (isPanning) {
-                    isPanning = false;
-                    if (!editMode) bottomWrap.style.cursor = 'crosshair';
-                    else bottomWrap.style.cursor = 'grab';
-                }
-                if (editDragMode) {
-                    editDragMode = null;
-                    editDragStart = null;
-                    editResizeCorner = null;
-                    renderAll();
-                }
-            });
-
-            bottomCanvas.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                const bp = getBottomCanvasPos(e);
-                const tpBefore = bottomToTop(bp.x, bp.y);
-
-                const zoomFactor = 1.08;
-                if (e.deltaY < 0) {
-                    bottomZoom = Math.min(8, bottomZoom * zoomFactor);
-                } else {
-                    bottomZoom = Math.max(0.5, bottomZoom / zoomFactor);
-                }
-
-                // Adjust pan to keep the point under cursor
-                const tpAfter = bottomToTop(bp.x, bp.y);
-                bottomPanX += tpBefore.x - tpAfter.x;
-                bottomPanY += tpBefore.y - tpAfter.y;
-                clampPan();
-                renderAll();
-            });
-
-            // ──────────────────────────────────────
-            // TOP CANVAS INTERACTION (Edit mode)
-            // ──────────────────────────────────────
-            topCanvas.addEventListener('pointerdown', (e) => {
-                if (!editMode) return;
-                const tp = getTopCanvasPos(e);
-                const hit = hitTestTop(tp.x, tp.y);
-                if (hit) {
-                    selectItem(hit);
-                    startEditDrag(e, hit);
-                } else {
-                    deselectAll();
-                    renderAll();
-                }
-            });
-
-            topCanvas.addEventListener('pointermove', (e) => {
-                if (editDragMode && selectedItem && editMode) {
-                    handleEditDragTop(e);
-                }
-            });
-
-            topCanvas.addEventListener('pointerup', () => {
-                if (editDragMode) {
-                    editDragMode = null;
-                    editDragStart = null;
-                    editResizeCorner = null;
-                    renderAll();
-                }
-            });
-
-            function hitTestTop(tx, ty) {
-                // Check shapes (reverse order for top-most first)
-                for (let i = shapes.length - 1; i >= 0; i--) {
-                    const s = shapes[i];
-                    const cx = s.x + s.w / 2;
-                    const cy = s.y + s.h / 2;
-                    // Simple AABB check (ignoring rotation for hit test)
-                    const margin = 8;
-                    if (tx >= s.x - margin && tx <= s.x + s.w + margin && ty >= s.y - margin && ty <= s.y + s.h +
-                        margin) {
-                        return { type: 'shape', index: i };
-                    }
-                }
-                for (let i = images.length - 1; i >= 0; i--) {
-                    const img = images[i];
-                    if (tx >= img.x && tx <= img.x + img.w && ty >= img.y && ty <= img.y + img.h) {
-                        return { type: 'image', index: i };
-                    }
-                }
-                for (let i = latexItems.length - 1; i >= 0; i--) {
-                    const lt = latexItems[i];
-                    if (tx >= lt.x && tx <= lt.x + lt.w && ty >= lt.y && ty <= lt.y + lt.h) {
-                        return { type: 'latex', index: i };
-                    }
-                }
-                return null;
-            }
-
-            function selectItem(hit) {
-                deselectAll();
-                selectedItem = hit;
-                if (hit.type === 'shape') shapes[hit.index].selected = true;
-                if (hit.type === 'image') images[hit.index].selected = true;
-                if (hit.type === 'latex') latexItems[hit.index].selected = true;
-                renderAll();
-            }
-
-            function deselectAll() {
-                shapes.forEach(s => s.selected = false);
-                images.forEach(img => img.selected = false);
-                latexItems.forEach(lt => lt.selected = false);
-                selectedItem = null;
-                renderAll();
-            }
-
-            function startEditDrag(e, hit) {
-                editDragStart = { x: e.clientX, y: e.clientY };
-                const tp = getTopCanvasPosFromClient(e.clientX, e.clientY);
-                if (!tp) return;
-
-                let item;
-                if (hit.type === 'shape') item = shapes[hit.index];
-                if (hit.type === 'image') item = images[hit.index];
-                if (hit.type === 'latex') item = latexItems[hit.index];
-                if (!item) return;
-
-                // Check if near rotation handle
-                const cx = item.x + item.w / 2;
-                const topY = item.y;
-                const distToRotHandle = Math.hypot(tp.x - cx, tp.y - (topY - 16));
-                if (distToRotHandle < 18 && editMode) {
-                    editDragMode = 'rotate';
-                    editDragStart.initialRotation = item.rotation || 0;
-                    editDragStart.centerX = cx;
-                    editDragStart.centerY = item.y + item.h / 2;
-                } else if (isNearCorner(tp, item)) {
-                    editDragMode = 'resize';
-                    editDragStart.itemStart = { x: item.x, y: item.y, w: item.w, h: item.h };
-                    editResizeCorner = getClosestCorner(tp, item);
-                } else {
-                    editDragMode = 'move';
-                    editDragStart.itemStart = { x: item.x, y: item.y };
-                }
-            }
-
-            function handleEditDrag(e) {
-                if (!editDragStart || !selectedItem) return;
-                const dx = e.clientX - editDragStart.x;
-                const dy = e.clientY - editDragStart.y;
-                let item;
-                if (selectedItem.type === 'shape') item = shapes[selectedItem.index];
-                if (selectedItem.type === 'image') item = images[selectedItem.index];
-                if (selectedItem.type === 'latex') item = latexItems[selectedItem.index];
-                if (!item) return;
-
-                if (editDragMode === 'move') {
-                    item.x = editDragStart.itemStart.x + dx / bottomZoom;
-                    item.y = editDragStart.itemStart.y + dy / bottomZoom;
-                } else if (editDragMode === 'resize' && editResizeCorner) {
-                    const scaleFactor = 1 / bottomZoom;
-                    item.x = editDragStart.itemStart.x;
-                    item.y = editDragStart.itemStart.y;
-                    item.w = editDragStart.itemStart.w;
-                    item.h = editDragStart.itemStart.h;
-                    if (editResizeCorner.includes('right')) item.w += dx * scaleFactor;
-                    if (editResizeCorner.includes('bottom')) item.h += dy * scaleFactor;
-                    if (editResizeCorner.includes('left')) { item.x += dx * scaleFactor;
-                        item.w -= dx * scaleFactor; }
-                    if (editResizeCorner.includes('top')) { item.y += dy * scaleFactor;
-                        item.h -= dy * scaleFactor; }
-                    item.w = Math.max(20, item.w);
-                    item.h = Math.max(20, item.h);
-                } else if (editDragMode === 'rotate') {
-                    const tp = bottomToTop(
-                        e.clientX - bottomCanvas.getBoundingClientRect().left,
-                        e.clientY - bottomCanvas.getBoundingClientRect().top
-                    );
-                    const angle = Math.atan2(tp.y - editDragStart.centerY, tp.x - editDragStart.centerX) * 180 / Math
-                    .PI;
-                    item.rotation = editDragStart.initialRotation + angle - Math.atan2(
-                        editDragStart.y - editDragStart.centerY,
-                        editDragStart.x - editDragStart.centerX
-                    ) * 180 / Math.PI;
-                }
-                renderAll();
-            }
-
-            function handleEditDragTop(e) {
-                if (!editDragStart || !selectedItem) return;
-                const tp = getTopCanvasPos(e);
-                const dx = tp.x - editDragStart.initialMouseX;
-                const dy = tp.y - editDragStart.initialMouseY;
-                let item;
-                if (selectedItem.type === 'shape') item = shapes[selectedItem.index];
-                if (selectedItem.type === 'image') item = images[selectedItem.index];
-                if (selectedItem.type === 'latex') item = latexItems[selectedItem.index];
-                if (!item) return;
-
-                if (editDragMode === 'move') {
-                    item.x = (editDragStart.itemStart?.x || item.x) + dx;
-                    item.y = (editDragStart.itemStart?.y || item.y) + dy;
-                }
-                renderAll();
-            }
-
-            function getTopCanvasPosFromClient(cx, cy) {
-                const rect = topCanvas.getBoundingClientRect();
-                const scaleX = topW / rect.width;
-                const scaleY = topH / rect.height;
-                return { x: (cx - rect.left) * scaleX, y: (cy - rect.top) * scaleY };
-            }
-
-            function isNearCorner(tp, item) {
-                const corners = [
-                    { x: item.x, y: item.y }, { x: item.x + item.w, y: item.y },
-                    { x: item.x, y: item.y + item.h }, { x: item.x + item.w, y: item.y + item.h }
-                ];
-                return corners.some(c => Math.hypot(tp.x - c.x, tp.y - c.y) < 18);
-            }
-
-            function getClosestCorner(tp, item) {
-                const corners = [
-                    { label: 'topleft', x: item.x, y: item.y },
-                    { label: 'topright', x: item.x + item.w, y: item.y },
-                    { label: 'bottomleft', x: item.x, y: item.y + item.h },
-                    { label: 'bottomright', x: item.x + item.w, y: item.y + item.h }
-                ];
-                let best = corners[0];
-                let bestDist = Infinity;
-                for (const c of corners) {
-                    const d = Math.hypot(tp.x - c.x, tp.y - c.y);
-                    if (d < bestDist) { bestDist = d;
-                        best = c; }
-                }
-                return best.label;
-            }
-
-            function eraseStrokeAt(tx, ty) {
-                const threshold = 20;
-                for (let i = strokes.length - 1; i >= 0; i--) {
-                    const s = strokes[i];
-                    if (s.type === 'erase-stroke' || s.type === 'eraser-normal') continue;
-                    for (const p of s.points) {
-                        if (Math.hypot(p.x - tx, p.y - ty) < threshold) {
-                            strokes.splice(i, 1);
-                            return;
-                        }
-                    }
-                }
-            }
-
-            // ──────────────────────────────────────
-            // TOOLBAR HANDLERS
-            // ──────────────────────────────────────
-            document.getElementById('btn-pen').addEventListener('click', () => setTool('pen'));
-            document.getElementById('btn-eraser-normal').addEventListener('click', () => setTool('eraser-normal'));
-            document.getElementById('btn-eraser-stroke').addEventListener('click', () => setTool('eraser-stroke'));
-            document.getElementById('btn-clear-all').addEventListener('click', clearAll);
-            document.getElementById('btn-shape-rect').addEventListener('click', () => setTool('shape-rect'));
-            document.getElementById('btn-shape-circle').addEventListener('click', () => setTool('shape-circle'));
-            document.getElementById('btn-shape-triangle').addEventListener('click', () => setTool('shape-triangle'));
-            document.getElementById('btn-shape-line').addEventListener('click', () => setTool('shape-line'));
-            document.getElementById('btn-shape-arrow').addEventListener('click', () => setTool('shape-arrow'));
-            document.getElementById('btn-edit-mode').addEventListener('click', toggleEditMode);
-            document.getElementById('btn-add-image').addEventListener('click', triggerImageUpload);
-            document.getElementById('btn-latex').addEventListener('click', openLatexModal);
-            document.getElementById('btn-record').addEventListener('click', toggleRecording);
-            document.getElementById('btn-upload-pdf').addEventListener('click', () => document.getElementById(
-                'pdf-file-input').click());
-            document.getElementById('pdf-file-input').addEventListener('change', handlePdfUpload);
-            document.getElementById('btn-remove-pdf').addEventListener('click', removePdf);
-            document.getElementById('btn-latex-cancel').addEventListener('click', closeLatexModal);
-            document.getElementById('btn-latex-insert').addEventListener('click', insertLatex);
-            document.getElementById('pen-color').addEventListener('input', (e) => penColor = e.target.value);
-            document.getElementById('pen-size').addEventListener('input', (e) => {
-                penSize = parseInt(e.target.value);
-                document.getElementById('pen-size-label').textContent = penSize + 'px';
-            });
-            document.getElementById('latex-input').addEventListener('input', updateLatexPreview);
-
-            function setTool(tool) {
-                currentTool = tool;
-                editMode = false;
-                document.getElementById('btn-edit-mode').classList.remove('active');
-                bottomWrap.classList.add('drawing-mode');
-                bottomWrap.style.cursor = 'crosshair';
-                deselectAll();
-
-                // Update button states
-                const toolButtons = ['btn-pen', 'btn-eraser-normal', 'btn-eraser-stroke',
-                    'btn-shape-rect', 'btn-shape-circle', 'btn-shape-triangle', 'btn-shape-line', 'btn-shape-arrow'
-                ];
-                toolButtons.forEach(id => document.getElementById(id).classList.remove('active', 'danger-active'));
-                if (tool === 'pen') document.getElementById('btn-pen').classList.add('active');
-                if (tool === 'eraser-normal') document.getElementById('btn-eraser-normal').classList.add(
-                'danger-active');
-                if (tool === 'eraser-stroke') document.getElementById('btn-eraser-stroke').classList.add('danger-active');
-                if (tool.startsWith('shape-')) {
-                    const shapeMap = {
-                        'shape-rect': 'btn-shape-rect',
-                        'shape-circle': 'btn-shape-circle',
-                        'shape-triangle': 'btn-shape-triangle',
-                        'shape-line': 'btn-shape-line',
-                        'shape-arrow': 'btn-shape-arrow'
-                    };
-                    document.getElementById(shapeMap[tool])?.classList.add('active');
-                }
-                renderAll();
-            }
-
-            function toggleEditMode() {
-                editMode = !editMode;
-                const btn = document.getElementById('btn-edit-mode');
-                if (editMode) {
-                    btn.classList.add('active');
-                    currentTool = 'edit';
-                    bottomWrap.classList.remove('drawing-mode');
-                    bottomWrap.style.cursor = 'grab';
-                    // Deactivate other tool buttons
-                    const toolButtons = ['btn-pen', 'btn-eraser-normal', 'btn-eraser-stroke',
-                        'btn-shape-rect', 'btn-shape-circle', 'btn-shape-triangle', 'btn-shape-line', 'btn-shape-arrow'
-                    ];
-                    toolButtons.forEach(id => document.getElementById(id).classList.remove('active', 'danger-active'));
-                } else {
-                    btn.classList.remove('active');
-                    setTool('pen');
-                    deselectAll();
-                }
-                renderAll();
-                showToast(editMode ? '🔧 Edit Mode ON - Move, resize & rotate items' : 'Edit Mode OFF');
-            }
-
-            function clearAll() {
-                if (confirm('Clear all annotations? This cannot be undone.')) {
-                    strokes = [];
-                    shapes = [];
-                    images = [];
-                    latexItems = [];
-                    deselectAll();
-                    renderAll();
-                    showToast('🗑 All annotations cleared');
-                }
-            }
-
-            function triggerImageUpload() {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const aspect = img.width / img.height;
-                            const h = 200;
-                            const w = h * aspect;
-                            images.push({
-                                id: 'img_' + (++imageIdCounter),
-                                imgElement: img,
-                                x: topW / 2 - w / 2,
-                                y: topH / 2 - h / 2,
-                                w,
-                                h,
-                                rotation: 0,
-                                selected: false
-                            });
-                            renderAll();
-                            showToast('🖼 Image added! Use Edit Mode to move/resize/rotate');
-                        };
-                        img.src = ev.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                };
-                input.click();
-            }
-
-            // ──────────────────────────────────────
-            // LATEX
-            // ──────────────────────────────────────
-            function openLatexModal() {
-                modalOverlay.classList.add('show');
-                latexInput.value = '';
-                latexPreview.innerHTML = '';
-                latexInput.focus();
-            }
-
-            function closeLatexModal() {
-                modalOverlay.classList.remove('show');
-            }
-
-            function updateLatexPreview() {
-                const tex = latexInput.value.trim();
-                if (!tex) { latexPreview.innerHTML = ''; return; }
-                latexPreview.innerHTML = '\\[' + tex + '\\]';
-                if (window.MathJax && MathJax.typesetPromise) {
-                    MathJax.typesetPromise([latexPreview]).catch(() => {});
-                }
-            }
-
-            function insertLatex() {
-                const tex = latexInput.value.trim();
-                if (!tex) return;
-                // Render LaTeX to SVG using MathJax
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = '\\[' + tex + '\\]';
-                tempDiv.style.position = 'absolute';
-                tempDiv.style.left = '-9999px';
-                tempDiv.style.top = '-9999px';
-                document.body.appendChild(tempDiv);
-                if (window.MathJax && MathJax.typesetPromise) {
-                    MathJax.typesetPromise([tempDiv]).then(() => {
-                        const svg = tempDiv.querySelector('svg');
-                        if (svg) {
-                            const svgString = new XMLSerializer().serializeToString(svg);
-                            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-                            const url = URL.createObjectURL(svgBlob);
-                            const img = new Image();
-                            img.onload = () => {
-                                const aspect = img.width / img.height || 4;
-                                const h = 60;
-                                const w = Math.max(80, h * aspect);
-                                const cachedImg = new Image();
-                                cachedImg.src = url;
-                                latexItems.push({
-                                    id: 'latex_' + (++latexIdCounter),
-                                    svgString,
-                                    x: topW / 2 - w / 2,
-                                    y: topH / 2 - h / 2,
-                                    w,
-                                    h,
-                                    rotation: 0,
-                                    selected: false,
-                                    cachedImage: cachedImg
-                                });
-                                renderAll();
-                                showToast('📐 LaTeX equation added!');
-                            };
-                            img.src = url;
-                        }
-                        document.body.removeChild(tempDiv);
-                    }).catch(() => {
-                        document.body.removeChild(tempDiv);
-                        showToast('⚠️ LaTeX rendering failed');
-                    });
-                } else {
-                    document.body.removeChild(tempDiv);
-                    showToast('⚠️ MathJax not loaded yet');
-                }
-                closeLatexModal();
-            }
-
-            // ──────────────────────────────────────
-            // PDF HANDLING
-            // ──────────────────────────────────────
-            async function handlePdfUpload(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                const arrayBuffer = await file.arrayBuffer();
-                pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                pdfPages = [];
-                pdfThumbnails.innerHTML = '';
-                for (let i = 1; i <= pdfDoc.numPages; i++) {
-                    const page = await pdfDoc.getPage(i);
-                    const viewport = page.getViewport({ scale: 1 });
-                    pdfPages.push({ page, viewport });
-                    // Create thumbnail
-                    const thumbCanvas = document.createElement('canvas');
-                    const thumbScale = 70 / viewport.width;
-                    thumbCanvas.width = 70;
-                    thumbCanvas.height = Math.floor(viewport.height * thumbScale);
-                    const thumbCtx = thumbCanvas.getContext('2d');
-                    await page.render({ canvasContext: thumbCtx, viewport: page.getViewport({ scale: thumbScale }) })
-                        .promise;
-                    const thumbDiv = document.createElement('div');
-                    thumbDiv.className = 'thumb';
-                    thumbDiv.innerHTML =
-                        '<canvas></canvas><span class="page-num">' + i + '</span>';
-                    thumbDiv.querySelector('canvas').getContext('2d').drawImage(thumbCanvas, 0, 0);
-                    thumbDiv.addEventListener('click', () => switchPdfPage(i - 1));
-                    pdfThumbnails.appendChild(thumbDiv);
-                }
-                pdfSliderPanel.style.display = 'flex';
-                document.getElementById('btn-remove-pdf').style.display = 'inline-flex';
-                currentPdfPage = 0;
-                await renderPdfPage(0);
-                showToast('📄 PDF loaded - ' + pdfDoc.numPages + ' pages');
-            }
-
-            async function renderPdfPage(pageIndex) {
-                if (!pdfDoc || pageIndex >= pdfPages.length) return;
-                currentPdfPage = pageIndex;
-                const pageData = pdfPages[pageIndex];
-                const page = pageData.page;
-                // Render at high resolution to fit topW x topH
-                const scale = Math.max(topW / pageData.viewport.width, topH / pageData.viewport.height);
-                const viewport = page.getViewport({ scale });
-                const renderCanvas = document.createElement('canvas');
-                renderCanvas.width = topW;
-                renderCanvas.height = topH;
-                const renderCtx = renderCanvas.getContext('2d');
-                // White bg
-                renderCtx.fillStyle = '#ffffff';
-                renderCtx.fillRect(0, 0, topW, topH);
-                // Center the PDF
-                const offsetX = (topW - viewport.width) / 2;
-                const offsetY = (topH - viewport.height) / 2;
-                await page.render({
-                    canvasContext: renderCtx,
-                    viewport,
-                    transform: [1, 0, 0, 1, offsetX, offsetY]
-                }).promise;
-                pdfBackgroundImage = new Image();
-                pdfBackgroundImage.src = renderCanvas.toDataURL();
-                await new Promise(r => { pdfBackgroundImage.onload = r; });
-                // Update thumbnails
-                const thumbs = pdfThumbnails.querySelectorAll('.thumb');
-                thumbs.forEach((t, i) => t.classList.toggle('active', i === pageIndex));
-                pdfPageInfo.textContent = 'Page ' + (pageIndex + 1) + ' / ' + pdfPages.length;
-                renderAll();
-            }
-
-            function switchPdfPage(index) {
-                if (index === currentPdfPage) return;
-                renderPdfPage(index);
-            }
-
-            function removePdf() {
-                pdfDoc = null;
-                pdfPages = [];
-                pdfBackgroundImage = null;
-                pdfThumbnails.innerHTML = '';
-                pdfSliderPanel.style.display = 'none';
-                document.getElementById('btn-remove-pdf').style.display = 'none';
-                pdfPageInfo.textContent = '';
-                currentPdfPage = 0;
-                renderAll();
-                showToast('PDF removed');
-            }
-
-            // ──────────────────────────────────────
-            // VOICE RECORDING
-            // ──────────────────────────────────────
-            async function startVoiceRecording() {
-                if (isRecording) return;
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                    audioChunks = [];
-                    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-                    mediaRecorder.onstop = () => {
-                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                        const url = URL.createObjectURL(blob);
-                        // Store or auto-download
-                        console.log('Recording saved, size:', blob.size);
-                        if (blob.size > 0) {
-                            showToast('🎤 Voice recording saved (' + (blob.size / 1024).toFixed(1) + ' KB)');
-                        }
-                    };
-                    mediaRecorder.start();
-                    isRecording = true;
-                    updateRecordUI();
-                } catch (err) {
-                    console.warn('Microphone not available:', err);
-                }
-            }
-
-            function stopVoiceRecording() {
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                    mediaRecorder.stop();
-                    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-                    isRecording = false;
-                    updateRecordUI();
-                }
-            }
-
-            function toggleRecording() {
-                if (isRecording) {
-                    stopVoiceRecording();
-                    showToast('🎤 Recording stopped & saved');
-                } else {
-                    startVoiceRecording();
-                    if (isRecording) showToast('🎤 Recording started - speak while you write!');
-                }
-            }
-
-            function updateRecordUI() {
-                const btn = document.getElementById('btn-record');
-                if (isRecording) {
-                    btn.classList.add('recording');
-                    recordStatus.textContent = '🔴 Recording...';
-                    recordStatus.style.color = '#f55a5a';
-                } else {
-                    btn.classList.remove('recording');
-                    recordStatus.textContent = 'Off';
-                    recordStatus.style.color = 'var(--text2)';
-                }
-            }
-
-            // ──────────────────────────────────────
-            // KEYBOARD SHORTCUTS
-            // ──────────────────────────────────────
-            window.addEventListener('keydown', (e) => {
-                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-                switch (e.key.toLowerCase()) {
-                    case 'p':
-                        setTool('pen');
-                        break;
-                    case 'e':
-                        setTool('eraser-normal');
-                        break;
-                    case 's':
-                        if (!e.ctrlKey && !e.metaKey) { setTool('shape-rect'); }
-                        break;
-                    case 'escape':
-                        deselectAll();
-                        if (editMode) toggleEditMode();
-                        break;
-                    case 'z':
-                        if (e.ctrlKey || e.metaKey) {
-                            e.preventDefault();
-                            if (strokes.length > 0) strokes.pop();
-                            renderAll();
-                        }
-                        break;
-                }
-            });
-
-            // ──────────────────────────────────────
-            // TOAST
-            // ──────────────────────────────────────
-            let toastTimeout;
-
-            function showToast(msg) {
-                toast.textContent = msg;
-                toast.classList.add('show');
-                clearTimeout(toastTimeout);
-                toastTimeout = setTimeout(() => toast.classList.remove('show'), 2200);
-            }
-
-            // ──────────────────────────────────────
-            // RESIZE HANDLER
-            // ──────────────────────────────────────
-            window.addEventListener('resize', () => {
-                const containerH = document.getElementById('bottom-canvas-container').clientHeight;
-                const containerW = document.getElementById('bottom-canvas-container').clientWidth;
-                const ratio = topW / topH;
-                if (containerW / containerH > ratio) {
-                    bottomH = Math.floor(containerH * 0.85);
-                    bottomW = Math.floor(bottomH * ratio);
-                } else {
-                    bottomW = Math.floor(containerW * 0.85);
-                    bottomH = Math.floor(bottomW / ratio);
-                }
-                bottomW = Math.max(bottomW, 300);
-                bottomH = Math.max(bottomH, 180);
-                bottomCanvas.width = bottomW;
-                bottomCanvas.height = bottomH;
-                bottomCanvas.style.width = bottomW + 'px';
-                bottomCanvas.style.height = bottomH + 'px';
-                clampPan();
-                renderAll();
-            });
-
-            // ──────────────────────────────────────
-            // STARTUP
-            // ──────────────────────────────────────
-            initCanvases();
+            ctx.lineTo(s.points[s.points.length-1].x, s.points[s.points.length-1].y);
+            ctx.stroke();
+          } else if (s.points.length === 1) {
+            ctx.beginPath();
+            ctx.arc(s.points[0].x, s.points[0].y, s.size/2, 0, Math.PI*2);
+            ctx.fillStyle = s.type==='eraser' ? '#000' : s.color;
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        // Shapes
+        for (const sh of shapes) {
+          ctx.save();
+          const cx = sh.x + sh.w/2, cy = sh.y + sh.h/2;
+          ctx.translate(cx, cy);
+          ctx.rotate((sh.rotation||0) * Math.PI/180);
+          ctx.translate(-cx, -cy);
+          ctx.strokeStyle = sh.color || penColor;
+          ctx.fillStyle = sh.fill || 'transparent';
+          ctx.lineWidth = 2;
+          if (sh.type === 'rect') {
+            ctx.beginPath();
+            ctx.roundRect(sh.x, sh.y, sh.w, sh.h, 6);
+            ctx.fill();
+            ctx.stroke();
+          } else if (sh.type === 'circle') {
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, sh.w/2, sh.h/2, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke();
+          }
+          if (sh.selected && editMode) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5,4]);
+            ctx.strokeRect(sh.x-6, sh.y-6, sh.w+12, sh.h+12);
+            ctx.setLineDash([]);
+          }
+          ctx.restore();
+        }
+        // Images
+        for (const img of images) {
+          ctx.save();
+          const cx = img.x + img.w/2, cy = img.y + img.h/2;
+          ctx.translate(cx, cy);
+          ctx.rotate((img.rotation||0) * Math.PI/180);
+          ctx.translate(-cx, -cy);
+          ctx.drawImage(img.imgElement, img.x, img.y, img.w, img.h);
+          if (img.selected && editMode) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5,4]);
+            ctx.strokeRect(img.x-4, img.y-4, img.w+8, img.h+8);
+            ctx.setLineDash([]);
+          }
+          ctx.restore();
+        }
+        // LaTeX
+        for (const lt of latexItems) {
+          ctx.save();
+          const cx = lt.x + lt.w/2, cy = lt.y + lt.h/2;
+          ctx.translate(cx, cy);
+          ctx.rotate((lt.rotation||0) * Math.PI/180);
+          ctx.translate(-cx, -cy);
+          if (lt.cachedImg) ctx.drawImage(lt.cachedImg, lt.x, lt.y, lt.w, lt.h);
+          if (lt.selected && editMode) {
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5,4]);
+            ctx.strokeRect(lt.x-4, lt.y-4, lt.w+8, lt.h+8);
+            ctx.setLineDash([]);
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawGrid() {
+        const spacing = 40;
+        bottomCtx.strokeStyle = '#e2e8f0';
+        bottomCtx.lineWidth = 0.5;
+        bottomCtx.beginPath();
+        for (let x = -panX; x <= bottomW; x += spacing * zoom) {
+          bottomCtx.moveTo(x, 0);
+          bottomCtx.lineTo(x, bottomH);
+        }
+        for (let y = -panY; y <= bottomH; y += spacing * zoom) {
+          bottomCtx.moveTo(0, y);
+          bottomCtx.lineTo(bottomW, y);
+        }
+        bottomCtx.stroke();
+      }
+
+      // ──────────────────────────────────────
+      // COORDINATE HELPERS
+      // ──────────────────────────────────────
+      function screenToWorld(sx, sy) {
+        return {
+          x: (sx - panX) / zoom,
+          y: (sy - panY) / zoom
+        };
+      }
+
+      function getBottomCoords(e) {
+        const rect = bottomCanvas.getBoundingClientRect();
+        const scaleX = bottomW / rect.width;
+        const scaleY = bottomH / rect.height;
+        const sx = (e.clientX - rect.left) * scaleX;
+        const sy = (e.clientY - rect.top) * scaleY;
+        return screenToWorld(sx, sy);
+      }
+
+      // ──────────────────────────────────────
+      // BOTTOM CANVAS EVENT HANDLERS
+      // ──────────────────────────────────────
+      function onBottomPointerDown(e) {
+        e.preventDefault();
+        const coords = getBottomCoords(e);
+        if (currentTool === 'pan' || (e.button === 1 && currentTool !== 'edit')) {
+          startPan(e);
+          return;
+        }
+        if (editMode && currentTool === 'edit') {
+          const hit = hitTest(coords.x, coords.y);
+          if (hit) {
+            selectItem(hit);
+            startEditDrag(e, hit);
+          } else {
+            deselectAll();
             renderAll();
-            showToast('✨ Whiteboard ready! Write on bottom canvas, view on top. Scroll to zoom.');
+          }
+          return;
+        }
+        if (currentTool === 'pen' || currentTool === 'eraser') {
+          saveState();
+          isDrawing = true;
+          currentStroke = {
+            id: nextId++,
+            type: currentTool === 'eraser' ? 'eraser' : 'pen',
+            points: [{x:coords.x, y:coords.y}],
+            color: currentTool === 'eraser' ? '#000' : penColor,
+            size: currentTool === 'eraser' ? eraserSize : penSize
+          };
+          strokes.push(currentStroke);
+          startVoice();
+          renderAll();
+        } else if (currentTool === 'strokeEraser') {
+          const hitIdx = strokes.findIndex(s => s.type !== 'eraser' && pointNearStroke(coords, s, 15));
+          if (hitIdx !== -1) {
+            saveState();
+            strokes.splice(hitIdx, 1);
+            renderAll();
+          }
+        } else if (currentTool === 'shape-rect' || currentTool === 'shape-circle') {
+          saveState();
+          const shape = {
+            id: nextId++,
+            type: currentTool === 'shape-rect' ? 'rect' : 'circle',
+            x: coords.x, y: coords.y, w: 0, h: 0,
+            rotation: 0, color: penColor, fill: 'transparent', selected: false
+          };
+          shapes.push(shape);
+          currentStroke = null;
+          isDrawing = false;
+          startShapeDraw(shape, coords);
+        }
+      }
 
-            // ──────────────────────────────────────
-            // PDF.js worker
-            // ──────────────────────────────────────
-            pdfjsLib.GlobalWorkerOptions.workerSrc =
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      function onBottomPointerMove(e) {
+        e.preventDefault();
+        if (isPanning) {
+          const dx = e.clientX - panStartMouse.x;
+          const dy = e.clientY - panStartMouse.y;
+          panX = panStartPan.x + dx;
+          panY = panStartPan.y + dy;
+          clampPan();
+          renderAll();
+          return;
+        }
+        if (editDragMode && selectedItem) {
+          handleEditDrag(e);
+          return;
+        }
+        if (isDrawing && currentStroke) {
+          const coords = getBottomCoords(e);
+          currentStroke.points.push({x:coords.x, y:coords.y});
+          renderAll();
+        }
+        if (window._drawingShape) {
+          const coords = getBottomCoords(e);
+          updateShapeDraw(window._drawingShape, coords);
+        }
+      }
 
-            console.log('🚀 Advanced Whiteboard initialized');
-            console.log('  🖊 Draw on bottom canvas (zoomed) → appears on top canvas');
-            console.log('  🔍 Scroll on bottom canvas to zoom in/out');
-            console.log('  🖱 Drag on bottom canvas (when not drawing) to pan');
-            console.log('  🔧 Edit Mode to move/resize/rotate shapes & images');
-            console.log('  📐 LaTeX button to add equations');
-            console.log('  🎤 Record button for voice annotation');
-            console.log('  📄 Upload PDF for background');
-            console.log('  ⌨ Shortcuts: P=Pen, E=Eraser, S=Shape, Esc=Exit edit');
-        })();
-    </script>
+      function onBottomPointerUp(e) {
+        if (isPanning) {
+          isPanning = false;
+          bottomCanvas.style.cursor = currentTool==='pan' ? 'grab' : 'crosshair';
+          return;
+        }
+        if (isDrawing) {
+          isDrawing = false;
+          currentStroke = null;
+          stopVoice();
+          renderAll();
+        }
+        if (window._drawingShape) {
+          if (window._drawingShape.w < 5 || window._drawingShape.h < 5) shapes.pop();
+          window._drawingShape = null;
+          renderAll();
+        }
+        if (editDragMode) {
+          editDragMode = null;
+          editStart = null;
+          editItemStart = null;
+          renderAll();
+        }
+      }
+
+      function startPan(e) {
+        isPanning = true;
+        panStartMouse = {x: e.clientX, y: e.clientY};
+        panStartPan = {x: panX, y: panY};
+        bottomCanvas.style.cursor = 'grabbing';
+      }
+
+      function startShapeDraw(shape, startCoords) {
+        window._drawingShape = shape;
+        shape.x = startCoords.x;
+        shape.y = startCoords.y;
+        shape.w = 0; shape.h = 0;
+      }
+      function updateShapeDraw(shape, coords) {
+        shape.x = Math.min(shape.x, coords.x);
+        shape.y = Math.min(shape.y, coords.y);
+        shape.w = Math.abs(coords.x - shape.x);
+        shape.h = Math.abs(coords.y - shape.y);
+        renderAll();
+      }
+
+      // Pinch zoom
+      function onTouchStart(e) {
+        e.preventDefault();
+        if (e.touches.length === 2) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          initialPinchDist = Math.hypot(dx, dy);
+          initialZoom = zoom;
+          initialPan = {x: panX, y: panY};
+        } else if (e.touches.length === 1 && currentTool !== 'edit') {
+          onBottomPointerDown(e.touches[0]);
+        }
+      }
+      function onTouchMove(e) {
+        e.preventDefault();
+        if (e.touches.length === 2 && initialPinchDist) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const dist = Math.hypot(dx, dy);
+          const scale = dist / initialPinchDist;
+          zoom = Math.min(8, Math.max(0.5, initialZoom * scale));
+          const rect = bottomCanvas.getBoundingClientRect();
+          const midX = ((e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left) * (bottomW/rect.width);
+          const midY = ((e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top) * (bottomH/rect.height);
+          const worldBefore = screenToWorld(midX, midY);
+          panX = initialPan.x;
+          panY = initialPan.y;
+          const worldAfter = screenToWorld(midX, midY);
+          panX += (worldAfter.x - worldBefore.x) * zoom;
+          panY += (worldAfter.y - worldBefore.y) * zoom;
+          clampPan();
+          renderAll();
+        } else if (e.touches.length === 1) {
+          onBottomPointerMove(e.touches[0]);
+        }
+      }
+      function onTouchEnd(e) {
+        initialPinchDist = 0;
+        onBottomPointerUp(e);
+      }
+
+      bottomCanvas.addEventListener('pointerdown', onBottomPointerDown);
+      bottomCanvas.addEventListener('pointermove', onBottomPointerMove);
+      window.addEventListener('pointerup', onBottomPointerUp);
+      bottomCanvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = bottomCanvas.getBoundingClientRect();
+        const sx = (e.clientX - rect.left) * (bottomW / rect.width);
+        const sy = (e.clientY - rect.top) * (bottomH / rect.height);
+        const worldBefore = screenToWorld(sx, sy);
+        const delta = -e.deltaY * 0.005;
+        zoom = Math.min(8, Math.max(0.5, zoom * (1 + delta)));
+        const worldAfter = screenToWorld(sx, sy);
+        panX += (worldAfter.x - worldBefore.x) * zoom;
+        panY += (worldAfter.y - worldBefore.y) * zoom;
+        clampPan();
+        renderAll();
+      }, {passive:false});
+      bottomCanvas.addEventListener('touchstart', onTouchStart, {passive:false});
+      bottomCanvas.addEventListener('touchmove', onTouchMove, {passive:false});
+      bottomCanvas.addEventListener('touchend', onTouchEnd);
+
+      // ──────────────────────────────────────
+      // HIT TEST & SELECTION
+      // ──────────────────────────────────────
+      function hitTest(wx, wy) {
+        for (let i = shapes.length-1; i>=0; i--) {
+          const s = shapes[i];
+          if (wx >= s.x-8 && wx <= s.x+s.w+8 && wy >= s.y-8 && wy <= s.y+s.h+8) return {type:'shape', index:i};
+        }
+        for (let i = images.length-1; i>=0; i--) {
+          const img = images[i];
+          if (wx >= img.x && wx <= img.x+img.w && wy >= img.y && wy <= img.y+img.h) return {type:'image', index:i};
+        }
+        for (let i = latexItems.length-1; i>=0; i--) {
+          const lt = latexItems[i];
+          if (wx >= lt.x && wx <= lt.x+lt.w && wy >= lt.y && wy <= lt.y+lt.h) return {type:'latex', index:i};
+        }
+        return null;
+      }
+      function selectItem(hit) {
+        deselectAll();
+        selectedItem = hit;
+        if (hit.type==='shape') shapes[hit.index].selected = true;
+        if (hit.type==='image') images[hit.index].selected = true;
+        if (hit.type==='latex') latexItems[hit.index].selected = true;
+        renderAll();
+      }
+      function deselectAll() {
+        shapes.forEach(s=>s.selected=false);
+        images.forEach(i=>i.selected=false);
+        latexItems.forEach(l=>l.selected=false);
+        selectedItem = null;
+        renderAll();
+      }
+      function pointNearStroke(p, stroke, threshold) {
+        return stroke.points.some(pt => Math.hypot(pt.x-p.x, pt.y-p.y) < threshold);
+      }
+
+      // ──────────────────────────────────────
+      // EDIT DRAG (move/resize/rotate)
+      // ──────────────────────────────────────
+      function startEditDrag(e, hit) {
+        const coords = getBottomCoords(e);
+        let item;
+        if (hit.type==='shape') item = shapes[hit.index];
+        if (hit.type==='image') item = images[hit.index];
+        if (hit.type==='latex') item = latexItems[hit.index];
+        if (!item) return;
+        editStart = {x: e.clientX, y: e.clientY};
+        editItemStart = {x: item.x, y: item.y, w: item.w, h: item.h, rotation: item.rotation};
+        editDragMode = 'move';
+      }
+      function handleEditDrag(e) {
+        if (!selectedItem || !editDragMode) return;
+        const dx = (e.clientX - editStart.x) / zoom;
+        const dy = (e.clientY - editStart.y) / zoom;
+        let item;
+        if (selectedItem.type==='shape') item = shapes[selectedItem.index];
+        if (selectedItem.type==='image') item = images[selectedItem.index];
+        if (selectedItem.type==='latex') item = latexItems[selectedItem.index];
+        if (!item) return;
+        if (editDragMode === 'move') {
+          item.x = editItemStart.x + dx;
+          item.y = editItemStart.y + dy;
+        }
+        renderAll();
+      }
+
+      // ──────────────────────────────────────
+      // TOOLBAR ACTIONS
+      // ──────────────────────────────────────
+      function setTool(tool) {
+        currentTool = tool;
+        editMode = false;
+        document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active','danger-active'));
+        if (tool==='pen') document.getElementById('btn-pen').classList.add('active');
+        if (tool==='eraser') document.getElementById('btn-eraser').classList.add('danger-active');
+        if (tool==='strokeEraser') document.getElementById('btn-stroke-eraser').classList.add('danger-active');
+        if (tool==='pan') document.getElementById('btn-pan').classList.add('active');
+        if (tool==='edit') { document.getElementById('btn-edit').classList.add('active'); editMode=true; }
+        if (tool==='shape-rect') document.getElementById('btn-shape-rect').classList.add('active');
+        if (tool==='shape-circle') document.getElementById('btn-shape-circle').classList.add('active');
+        bottomCanvas.style.cursor = (tool==='pan') ? 'grab' : (tool==='edit'?'default':'crosshair');
+        deselectAll();
+      }
+
+      document.getElementById('btn-pen').onclick = ()=> setTool('pen');
+      document.getElementById('btn-eraser').onclick = ()=> setTool('eraser');
+      document.getElementById('btn-stroke-eraser').onclick = ()=> setTool('strokeEraser');
+      document.getElementById('btn-pan').onclick = ()=> setTool('pan');
+      document.getElementById('btn-edit').onclick = ()=> setTool('edit');
+      document.getElementById('btn-shape-rect').onclick = ()=> setTool('shape-rect');
+      document.getElementById('btn-shape-circle').onclick = ()=> setTool('shape-circle');
+      document.getElementById('btn-undo').onclick = undo;
+      document.getElementById('btn-redo').onclick = redo;
+      document.getElementById('btn-clear').onclick = ()=>{
+        if(confirm('Clear everything?')) { saveState(); strokes=[]; shapes=[]; images=[]; latexItems=[]; renderAll(); }
+      };
+      document.getElementById('penColor').oninput = e => penColor = e.target.value;
+      document.getElementById('penSize').oninput = e => {
+        penSize = parseInt(e.target.value);
+        document.getElementById('sizeLabel').textContent = penSize+'px';
+      };
+      document.getElementById('btn-image').onclick = ()=>{
+        const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*';
+        inp.onchange = (e)=>{
+          const file = e.target.files[0]; if(!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev)=>{
+            const img = new Image(); img.onload = ()=>{
+              saveState();
+              const aspect = img.width/img.height;
+              const h = 120, w = h * aspect;
+              images.push({id:nextId++, imgElement:img, x: topW/2-w/2, y: topH/2-h/2, w, h, rotation:0, selected:false});
+              renderAll();
+            }; img.src = ev.target.result;
+          }; reader.readAsDataURL(file);
+        }; inp.click();
+      };
+
+      // LaTeX
+      document.getElementById('btn-latex').onclick = ()=> document.getElementById('latex-modal').classList.add('show');
+      document.getElementById('latexCancel').onclick = ()=> document.getElementById('latex-modal').classList.remove('show');
+      document.getElementById('latexInsert').onclick = ()=>{
+        const tex = document.getElementById('latexInput').value.trim();
+        if(!tex) return;
+        const temp = document.createElement('div'); temp.style.position='absolute'; temp.style.left='-9999px';
+        temp.innerHTML = '\\['+tex+'\\]'; document.body.appendChild(temp);
+        MathJax.typesetPromise([temp]).then(()=>{
+          const svg = temp.querySelector('svg');
+          if(svg){
+            const svgStr = new XMLSerializer().serializeToString(svg);
+            const blob = new Blob([svgStr],{type:'image/svg+xml'});
+            const url = URL.createObjectURL(blob);
+            const img = new Image(); img.onload = ()=>{
+              saveState();
+              const h = 50, w = img.width/img.height*h;
+              const cached = new Image(); cached.src = url;
+              latexItems.push({id:nextId++, cachedImg:cached, x:topW/2-w/2, y:topH/2-h/2, w, h, rotation:0, selected:false});
+              renderAll();
+            }; img.src = url;
+          }
+          document.body.removeChild(temp);
+        });
+        document.getElementById('latex-modal').classList.remove('show');
+      };
+
+      // Voice
+      async function startVoice() {
+        if(isRecording) return;
+        try{
+          const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
+          mediaRecorder.start();
+          isRecording = true;
+          document.getElementById('recStatus').textContent = '🔴 Rec';
+        }catch(e){}
+      }
+      function stopVoice() {
+        if(mediaRecorder && mediaRecorder.state==='recording'){
+          mediaRecorder.stop();
+          mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+          isRecording = false;
+          document.getElementById('recStatus').textContent = 'Off';
+        }
+      }
+      document.getElementById('btn-record').onclick = ()=> {
+        if(isRecording) stopVoice(); else startVoice();
+      };
+
+      // PDF
+      document.getElementById('btn-pdf-upload').onclick = ()=> document.getElementById('pdfFileInput').click();
+      document.getElementById('pdfFileInput').onchange = async (e)=>{
+        const file = e.target.files[0]; if(!file) return;
+        const data = await file.arrayBuffer();
+        pdfDoc = await pdfjsLib.getDocument({data}).promise;
+        pdfPages = [];
+        const slider = document.getElementById('pdf-slider');
+        slider.innerHTML = ''; slider.style.display = 'flex';
+        for(let i=1; i<=pdfDoc.numPages; i++){
+          const page = await pdfDoc.getPage(i);
+          const vp = page.getViewport({scale:0.2});
+          const thumbCanvas = document.createElement('canvas');
+          thumbCanvas.width = vp.width; thumbCanvas.height = vp.height;
+          await page.render({canvasContext: thumbCanvas.getContext('2d'), viewport: vp}).promise;
+          const thumbDiv = document.createElement('div'); thumbDiv.className = 'thumb';
+          thumbDiv.innerHTML = `<canvas width="64" height="44"></canvas>`;
+          thumbDiv.querySelector('canvas').getContext('2d').drawImage(thumbCanvas,0,0,64,44);
+          thumbDiv.onclick = ()=> switchPdfPage(i-1);
+          slider.appendChild(thumbDiv);
+          pdfPages.push({page, vp});
+        }
+        currentPdfPage = 0;
+        await renderPdfPage(0);
+      };
+      async function renderPdfPage(idx) {
+        if(!pdfDoc) return;
+        const page = await pdfDoc.getPage(idx+1);
+        const scale = Math.min(topW/page.getViewport({scale:1}).width, topH/page.getViewport({scale:1}).height)*0.95;
+        const vp = page.getViewport({scale});
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = topW; tmpCanvas.height = topH;
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.fillStyle = '#fff'; tmpCtx.fillRect(0,0,topW,topH);
+        await page.render({canvasContext: tmpCtx, viewport: vp, transform: [1,0,0,1,(topW-vp.width)/2,(topH-vp.height)/2]}).promise;
+        pdfBgImage = new Image();
+        pdfBgImage.src = tmpCanvas.toDataURL();
+        await new Promise(r=>{pdfBgImage.onload=r;});
+        document.querySelectorAll('#pdf-slider .thumb').forEach((t,i)=> t.classList.toggle('active', i===idx));
+        renderAll();
+      }
+      function switchPdfPage(idx){ if(idx!==currentPdfPage){ currentPdfPage=idx; renderPdfPage(idx); } }
+
+      // Keyboard shortcuts
+      window.addEventListener('keydown', (e)=>{
+        if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT') return;
+        if(e.ctrlKey && e.key==='z') { e.preventDefault(); undo(); }
+        if(e.ctrlKey && e.key==='y') { e.preventDefault(); redo(); }
+        if(e.key==='p') setTool('pen');
+        if(e.key==='e') setTool('eraser');
+        if(e.key===' ') { e.preventDefault(); setTool('pan'); }
+      });
+
+      // Toast
+      function toast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(()=> t.classList.remove('show'), 2000);
+      }
+
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      setTool('pen');
+      toast('✒️ Write on bottom canvas • Scroll/pinch to zoom • Drag to pan');
+    })();
+  </script>
 </body>
 </html>
