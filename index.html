@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard Pro – High Quality PDF + Image Resize + HD Recording</title>
+    <title>Whiteboard Pro Max – Ultra HD | Smooth Handwriting | High Quality</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -16,13 +16,16 @@
             --bg: #f0f2f5; --surface: #ffffff; --surface2: #e9ecef; --accent: #e94560;
             --accent2: #6c5ce7; --text: #1a1a2e; --canvas-bg: #e8ecf1; --card-bg: #fff;
         }
-        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: var(--bg); height: 100vh; display: flex; flex-direction: column;
-            overflow: hidden; transition: background 0.3s, color 0.3s; color: var(--text);
+            overflow: hidden; transition: background 0.3s; color: var(--text);
             padding: 4px; gap: 4px;
         }
+        /* Disable user-select only on UI, not on canvas for better drawing */
+        button, .tool-group, .file-label, .color-swatch { user-select: none; }
+        
         .middle-toolbar {
             background: var(--surface);
             border-radius: var(--radius);
@@ -59,7 +62,7 @@
         button.accent2 { background: #8e44ad; }
         button.success { background: #27ae60; }
         input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; cursor: pointer; padding: 2px; }
-        input[type="range"] { width: 70px; accent-color: var(--accent); }
+        input[type="range"] { width: 80px; accent-color: var(--accent); }
         input[type="number"] { width: 50px; padding: 4px; border-radius: 12px; border: none; text-align: center; background: var(--surface); color: var(--text); }
         .color-palette { display: flex; gap: 4px; }
         .color-swatch {
@@ -77,10 +80,17 @@
             position: relative; flex: 1; background: var(--canvas-bg);
             display: flex; align-items: center; justify-content: center; overflow: auto; min-height: 0;
         }
-        canvas { display: block; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        canvas { 
+            display: block; 
+            background: white; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: crosshair;
+        }
         .status {
-            position: absolute; bottom: 4px; right: 8px; background: rgba(0,0,0,0.65); color: white;
-            padding: 2px 10px; border-radius: 14px; font-size: 10px; pointer-events: none; z-index: 5;
+            position: absolute; bottom: 4px; right: 8px; background: rgba(0,0,0,0.75); color: white;
+            padding: 4px 12px; border-radius: 20px; font-size: 11px; pointer-events: none; z-index: 5;
+            font-family: monospace;
+            backdrop-filter: blur(4px);
         }
         .slide-sidebar {
             position: fixed; right: -360px; top: 0; width: 350px; height: 100vh;
@@ -154,12 +164,23 @@
             font-size: 10px;
             font-weight: normal;
         }
+        .smoothness-control {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--surface2);
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+        .smoothness-control span {
+            font-size: 10px;
+        }
     </style>
 </head>
 <body>
 
 <div class="recording-indicator" id="recIndicator">🔴 RECORDING (HD)</div>
-<div class="info-banner" id="infoBanner">📌 PDF: High Quality Render | Image: Resizable in Edit Mode | Recording: HD Video</div>
+<div class="info-banner" id="infoBanner">✨ Ultra HD Canvas | Smooth Handwriting | High Quality PDF | Image Resizable</div>
 
 <!-- Middle Toolbar -->
 <div class="middle-toolbar" id="middleToolbar">
@@ -204,13 +225,18 @@
         </span>
     </div>
     <div class="tool-group">
+        <div class="smoothness-control">
+            <span>✍️</span>
+            <input type="range" id="smoothnessSlider" min="0" max="10" value="4">
+            <span id="smoothnessLabel" style="font-size:10px;">Smooth</span>
+        </div>
         <div class="zoom-controls">
             <button id="zoomOutBtn" title="Zoom Out">🔍−</button>
             <button id="zoomResetBtn" title="Reset Zoom">⟳</button>
             <button id="zoomInBtn" title="Zoom In">🔍+</button>
         </div>
         <input type="file" id="pdfFile" accept=".pdf" style="display:none">
-        <label for="pdfFile" class="file-label">📄 PDF (HD)</label>
+        <label for="pdfFile" class="file-label">📄 PDF (4K)</label>
         <input type="file" id="imgFile" accept="image/*" style="display:none">
         <label for="imgFile" class="file-label">🖼️ Img</label>
         <button id="recordBtn" class="danger">🔴 Rec HD</button>
@@ -227,14 +253,14 @@
 <!-- Main Layout -->
 <div class="main-layout">
     <div class="canvas-card">
-        <div class="card-header">📄 MASTER VIEW (Fixed)</div>
+        <div class="card-header">📄 MASTER VIEW (Ultra HD)</div>
         <div class="canvas-container" id="topContainer">
             <canvas id="topCanvas"></canvas>
             <div class="status" id="topStatus">Ready</div>
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ INTERACTIVE CANVAS (Zoom: 0.2x–12x | Pan: Right-Click Drag | Pinch: Two Fingers | Edit Mode: Resize Images)</div>
+        <div class="card-header">✍️ INTERACTIVE CANVAS (Smooth Handwriting | 4K Resolution | Zoom: 0.2x–12x)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
             <div class="status" id="bottomStatus">Zoom: 1.00x | Mode: Draw</div>
@@ -265,8 +291,8 @@
     // DOM Elements
     const topCanvas = document.getElementById('topCanvas');
     const bottomCanvas = document.getElementById('bottomCanvas');
-    const topCtx = topCanvas.getContext('2d');
-    const bottomCtx = bottomCanvas.getContext('2d');
+    const topCtx = topCanvas.getContext('2d', { alpha: false });
+    const bottomCtx = bottomCanvas.getContext('2d', { alpha: false });
     const bgCanvas = document.createElement('canvas');
     const bgCtx = bgCanvas.getContext('2d');
     const drawLayer = document.createElement('canvas');
@@ -274,14 +300,22 @@
     const highlighterLayer = document.createElement('canvas');
     const highlighterCtx = highlighterLayer.getContext('2d');
 
-    drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
-    highlighterCtx.lineCap = 'round'; highlighterCtx.lineJoin = 'round';
+    // Enable high-quality rendering
+    drawCtx.imageSmoothingEnabled = true;
+    drawCtx.imageSmoothingQuality = 'high';
+    highlighterCtx.imageSmoothingEnabled = true;
+    highlighterCtx.imageSmoothingQuality = 'high';
+    bottomCtx.imageSmoothingEnabled = true;
+    bottomCtx.imageSmoothingQuality = 'high';
+    topCtx.imageSmoothingEnabled = true;
+    topCtx.imageSmoothingQuality = 'high';
 
     // ========== STATE ==========
     let currentTool = 'draw';
     let penColor = '#000000';
     let penSize = 4;
     let opacity = 1;
+    let smoothness = 4;  // 0-10: higher = smoother handwriting
     
     // Pan & Zoom State (Range: 0.2 to 12)
     let scale = 1;
@@ -296,7 +330,10 @@
     let selectedObjectIndex = -1;
     let history = [], historyIndex = -1;
 
-    let drawing = false, lastX = 0, lastY = 0, smoothPoints = [];
+    let drawing = false, lastX = 0, lastY = 0;
+    let smoothPoints = [];  // For smooth curve interpolation
+    let pressurePoints = []; // For variable width (optional)
+    
     let shapeStart = null, currentShapeType = null;
     let customPolygonSides = 5;
 
@@ -319,12 +356,33 @@
     let mediaRecorder = null, recordedChunks = [], isRecording = false;
     let recordingStream = null;
 
+    // Canvas dimensions (Ultra HD base)
+    let canvasWidth = 2560;
+    let canvasHeight = 1600;
+
     // ========== HELPER FUNCTIONS ==========
     function setCanvasSize(w, h) {
-        [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { c.width = w; c.height = h; });
+        canvasWidth = w;
+        canvasHeight = h;
+        
+        [topCanvas, bottomCanvas, bgCanvas, drawLayer, highlighterLayer].forEach(c => { 
+            c.width = w; 
+            c.height = h; 
+        });
+        
+        // Clear layers
         drawCtx.clearRect(0, 0, w, h);
         highlighterCtx.clearRect(0, 0, w, h);
-        scale = 1; offsetX = 0; offsetY = 0;
+        
+        // Set default backgrounds
+        drawCtx.fillStyle = 'white';
+        drawCtx.fillRect(0, 0, w, h);
+        
+        // Reset transforms
+        scale = 1; 
+        offsetX = 0; 
+        offsetY = 0;
+        
         redrawAll();
     }
 
@@ -334,9 +392,63 @@
         ctx.strokeStyle = penColor;
         ctx.fillStyle = penColor;
         ctx.globalCompositeOperation = 'source-over';
-        if (tool === 'marker') { ctx.globalAlpha = opacity * 0.75; ctx.lineWidth = penSize * 1.3; }
-        else if (tool === 'highlighter') { ctx.globalAlpha = 0.25; ctx.lineWidth = penSize * 2.5; }
-        else if (tool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = penSize * 1.8; }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        if (tool === 'marker') { 
+            ctx.globalAlpha = opacity * 0.75; 
+            ctx.lineWidth = penSize * 1.2; 
+        }
+        else if (tool === 'highlighter') { 
+            ctx.globalAlpha = 0.2; 
+            ctx.lineWidth = penSize * 2.5; 
+        }
+        else if (tool === 'eraser') { 
+            ctx.globalCompositeOperation = 'destination-out'; 
+            ctx.strokeStyle = 'rgba(0,0,0,1)'; 
+            ctx.lineWidth = penSize * 2; 
+        }
+    }
+
+    // Smooth curve interpolation using Catmull-Rom spline
+    function drawSmoothCurve(points, ctx, tool) {
+        if (points.length < 2) return;
+        
+        ctx.save();
+        setBrush(ctx, tool);
+        ctx.beginPath();
+        
+        // Start at first point
+        ctx.moveTo(points[0].x, points[0].y);
+        
+        // Use Catmull-Rom spline for super smooth curves
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[Math.max(0, i - 1)];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[Math.min(points.length - 1, i + 2)];
+            
+            // Catmull-Rom interpolation
+            for (let t = 0; t <= 1; t += 0.1) {
+                const t2 = t * t;
+                const t3 = t2 * t;
+                
+                const x = 0.5 * ((2 * p1.x) +
+                    (-p0.x + p2.x) * t +
+                    (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+                    (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+                    
+                const y = 0.5 * ((2 * p1.y) +
+                    (-p0.y + p2.y) * t +
+                    (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+                    (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+                
+                ctx.lineTo(x, y);
+            }
+        }
+        
+        ctx.stroke();
+        ctx.restore();
     }
 
     function generatePolygonPoints(cx, cy, radius, sides, rotation = 0) {
@@ -435,13 +547,15 @@
         ctx.strokeStyle = obj.strokeStyle || penColor;
         ctx.lineWidth = obj.lineWidth || penSize;
         ctx.globalAlpha = obj.opacity || opacity;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         
         if (obj.type === 'rect') { ctx.beginPath(); ctx.rect(obj.x, obj.y, obj.w, obj.h); ctx.stroke(); }
         else if (obj.type === 'circle') { ctx.beginPath(); ctx.ellipse(obj.cx, obj.cy, obj.rx, obj.ry, 0, 0, 2*Math.PI); ctx.stroke(); }
         else if (obj.type === 'arrow') {
             ctx.beginPath(); ctx.moveTo(obj.x1, obj.y1); ctx.lineTo(obj.x2, obj.y2);
             const angle = Math.atan2(obj.y2 - obj.y1, obj.x2 - obj.x1);
-            const sz = Math.min(20, Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * 0.25);
+            const sz = Math.min(25, Math.hypot(obj.x2 - obj.x1, obj.y2 - obj.y1) * 0.25);
             ctx.moveTo(obj.x2, obj.y2);
             ctx.lineTo(obj.x2 - sz * Math.cos(angle - Math.PI/6), obj.y2 - sz * Math.sin(angle - Math.PI/6));
             ctx.moveTo(obj.x2, obj.y2);
@@ -471,7 +585,7 @@
             ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
         }
         else if (obj.type === 'text') {
-            ctx.font = `${obj.fontSize || 20}px "Segoe UI"`;
+            ctx.font = `${obj.fontSize || 24}px "Segoe UI", "Comic Sans MS", cursive`;
             ctx.fillStyle = obj.color || penColor;
             ctx.fillText(obj.text, obj.x, obj.y);
         }
@@ -509,12 +623,13 @@
         
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
-        ctx.arc(b.x + b.w/2, b.y - 22/scale, hSize/1.5, 0, 2*Math.PI);
+        ctx.arc(b.x + b.w/2, b.y - 25/scale, hSize/1.5, 0, 2*Math.PI);
         ctx.fill();
         ctx.restore();
     }
 
     function redrawAll() {
+        // Bottom canvas with zoom/pan
         bottomCtx.setTransform(1, 0, 0, 1, 0, 0);
         bottomCtx.clearRect(0, 0, bottomCanvas.width, bottomCanvas.height);
         bottomCtx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
@@ -522,10 +637,12 @@
         bottomCtx.drawImage(highlighterLayer, 0, 0);
         bottomCtx.drawImage(drawLayer, 0, 0);
         objects.forEach(obj => drawObject(bottomCtx, obj));
+        
         if (selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
             drawSelectionHandles(bottomCtx, objects[selectedObjectIndex]);
         }
         
+        // Top canvas (fixed view)
         topCtx.setTransform(1, 0, 0, 1, 0, 0);
         topCtx.clearRect(0, 0, topCanvas.width, topCanvas.height);
         topCtx.drawImage(bgCanvas, 0, 0);
@@ -537,7 +654,7 @@
         }
 
         const mode = vertexEditEnabled ? '✏️ Vertex Edit' : (editingEnabled ? '🔧 Edit' : '✏️ Draw');
-        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${mode}`;
+        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${mode} | Smooth: ${smoothness}/10`;
         document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline' : 'none';
     }
 
@@ -555,7 +672,7 @@
         if (historyIndex < history.length - 1) history = history.slice(0, historyIndex + 1);
         history.push(state);
         historyIndex = history.length - 1;
-        if (history.length > 30) { history.shift(); historyIndex--; }
+        if (history.length > 50) { history.shift(); historyIndex--; }
     }
 
     function restoreHistory(state) {
@@ -572,6 +689,64 @@
 
     function undo() { if (historyIndex > 0) { historyIndex--; restoreHistory(history[historyIndex]); } }
     function redo() { if (historyIndex < history.length - 1) { historyIndex++; restoreHistory(history[historyIndex]); } }
+
+    // ========== IMPROVED SMOOTH DRAWING ==========
+    function recordPoint(x, y) {
+        smoothPoints.push({ x, y });
+        // Keep only last N points for smoothing
+        const maxPoints = Math.max(5, Math.floor(smoothness) + 2);
+        while (smoothPoints.length > maxPoints) {
+            smoothPoints.shift();
+        }
+    }
+
+    function drawStoredPoints() {
+        if (smoothPoints.length < 2) return;
+        
+        const targetCtx = (currentTool === 'highlighter') ? highlighterCtx : drawCtx;
+        
+        // Apply smoothing based on smoothness level
+        if (smoothness >= 3 && smoothPoints.length >= 3) {
+            // Use Catmull-Rom spline for super smooth curves
+            targetCtx.save();
+            setBrush(targetCtx, currentTool);
+            targetCtx.beginPath();
+            
+            // Start at first point
+            targetCtx.moveTo(smoothPoints[0].x, smoothPoints[0].y);
+            
+            // Draw smooth curve through points
+            for (let i = 0; i < smoothPoints.length - 1; i++) {
+                const p1 = smoothPoints[i];
+                const p2 = smoothPoints[i + 1];
+                
+                // Add intermediate points for smoother curve
+                const steps = Math.max(2, Math.floor(smoothness / 2));
+                for (let t = 0; t <= 1; t += 1/steps) {
+                    const x = p1.x + (p2.x - p1.x) * t;
+                    const y = p1.y + (p2.y - p1.y) * t;
+                    targetCtx.lineTo(x, y);
+                }
+            }
+            
+            targetCtx.stroke();
+            targetCtx.restore();
+        } else {
+            // Simple line drawing for low smoothness or few points
+            const targetCtx = (currentTool === 'highlighter') ? highlighterCtx : drawCtx;
+            targetCtx.save();
+            setBrush(targetCtx, currentTool);
+            targetCtx.beginPath();
+            targetCtx.moveTo(smoothPoints[0].x, smoothPoints[0].y);
+            for (let i = 1; i < smoothPoints.length; i++) {
+                targetCtx.lineTo(smoothPoints[i].x, smoothPoints[i].y);
+            }
+            targetCtx.stroke();
+            targetCtx.restore();
+        }
+        
+        redrawAll();
+    }
 
     // ========== DRAWING HANDLERS ==========
     function handleDown(e) {
@@ -590,7 +765,7 @@
             const b = getObjectBounds(obj);
             const hSize = Math.max(12 / scale, 14);
             
-            const rotCenter = { x: b.x + b.w/2, y: b.y - 22/scale };
+            const rotCenter = { x: b.x + b.w/2, y: b.y - 25/scale };
             if (Math.hypot(p.x - rotCenter.x, p.y - rotCenter.y) < hSize) {
                 isRotating = true;
                 rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
@@ -640,9 +815,16 @@
         }
 
         drawing = true;
-        smoothPoints = [{ x: p.x, y: p.y }];
+        smoothPoints = [];
+        recordPoint(p.x, p.y);
         lastX = p.x; lastY = p.y;
-        saveHistory();
+        
+        // For dot drawing (single point)
+        setTimeout(() => {
+            if (drawing && smoothPoints.length === 1) {
+                drawStoredPoints();
+            }
+        }, 100);
     }
 
     function handleMove(e) {
@@ -686,7 +868,7 @@
                 else if (resizeHandle === 1) { obj.y = orig.y + dy; obj.w = orig.w + dx; obj.h = orig.h - dy; }
                 else if (resizeHandle === 2) { obj.x = orig.x + dx; obj.w = orig.w - dx; obj.h = orig.h + dy; }
                 else if (resizeHandle === 3) { obj.w = orig.w + dx; obj.h = orig.h + dy; }
-                if (obj.w < 10) obj.w = 10; if (obj.h < 10) obj.h = 10;
+                if (obj.w < 15) obj.w = 15; if (obj.h < 15) obj.h = 15;
             }
             else if (obj.type === 'circle') {
                 const newW = orig.w + (resizeHandle % 2 === 0 ? -dx : dx);
@@ -784,7 +966,7 @@
                 bottomCtx.stroke();
                 if (currentShapeType === 'arrow') {
                     const angle = Math.atan2(p.y - shapeStart.y, p.x - shapeStart.x);
-                    const sz = Math.min(20, Math.hypot(w, h) * 0.25);
+                    const sz = Math.min(25, Math.hypot(w, h) * 0.25);
                     bottomCtx.beginPath();
                     bottomCtx.moveTo(p.x, p.y);
                     bottomCtx.lineTo(p.x - sz * Math.cos(angle - Math.PI/6), p.y - sz * Math.sin(angle - Math.PI/6));
@@ -797,23 +979,11 @@
             return;
         }
         
-        if (Math.hypot(p.x - lastX, p.y - lastY) > 1) {
-            smoothPoints.push({ x: p.x, y: p.y });
-            if (smoothPoints.length > 3) smoothPoints.shift();
-            const targetCtx = (currentTool === 'highlighter') ? highlighterCtx : drawCtx;
-            targetCtx.save();
-            setBrush(targetCtx, currentTool);
-            targetCtx.beginPath();
-            targetCtx.moveTo(smoothPoints[0].x, smoothPoints[0].y);
-            for (let i = 1; i < smoothPoints.length - 1; i++) {
-                const xc = (smoothPoints[i].x + smoothPoints[i+1].x) / 2;
-                const yc = (smoothPoints[i].y + smoothPoints[i+1].y) / 2;
-                targetCtx.quadraticCurveTo(smoothPoints[i].x, smoothPoints[i].y, xc, yc);
-            }
-            targetCtx.lineTo(smoothPoints[smoothPoints.length-1].x, smoothPoints[smoothPoints.length-1].y);
-            targetCtx.stroke();
-            targetCtx.restore();
-            redrawAll();
+        // Smooth handwriting with distance threshold
+        const distance = Math.hypot(p.x - lastX, p.y - lastY);
+        if (distance > 0.5) {
+            recordPoint(p.x, p.y);
+            drawStoredPoints();
             lastX = p.x; lastY = p.y;
         }
     }
@@ -822,6 +992,22 @@
         if (isDraggingVertex) { isDraggingVertex = false; saveHistory(); redrawAll(); return; }
         if (isRotating || isResizing) { isRotating = isResizing = false; saveHistory(); redrawAll(); return; }
         if (isDraggingObject) { isDraggingObject = false; saveHistory(); redrawAll(); return; }
+        
+        if (drawing) {
+            if (smoothPoints.length === 1) {
+                // Draw a dot
+                const targetCtx = (currentTool === 'highlighter') ? highlighterCtx : drawCtx;
+                targetCtx.save();
+                setBrush(targetCtx, currentTool);
+                targetCtx.beginPath();
+                targetCtx.arc(smoothPoints[0].x, smoothPoints[0].y, penSize/2, 0, 2*Math.PI);
+                targetCtx.fill();
+                targetCtx.restore();
+                redrawAll();
+            }
+            saveHistory();
+        }
+        
         if (!drawing && !currentShapeType) return;
         e.preventDefault();
         
@@ -855,7 +1041,9 @@
             return;
         }
         
-        drawing = false; smoothPoints = []; redrawAll();
+        drawing = false; 
+        smoothPoints = []; 
+        redrawAll();
     }
 
     // ========== ZOOM & PAN ==========
@@ -932,12 +1120,9 @@
             return;
         }
         try {
-            // Create high-quality stream from top canvas
             const stream = topCanvas.captureStream(30);
             recordingStream = stream;
-            
-            // Try to get high quality video settings
-            const options = { mimeType: 'video/webm', videoBitsPerSecond: 5000000 };
+            const options = { mimeType: 'video/webm', videoBitsPerSecond: 8000000 };
             mediaRecorder = new MediaRecorder(stream, options);
             recordedChunks = [];
             
@@ -947,7 +1132,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `whiteboard-hd-${Date.now()}.webm`;
+                a.download = `whiteboard-4k-${Date.now()}.webm`;
                 a.click();
                 URL.revokeObjectURL(url);
                 if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
@@ -960,29 +1145,27 @@
         } catch (e) { alert('Recording error: ' + e.message); }
     }
 
-    // ========== PDF UPLOAD (HIGH QUALITY) ==========
+    // ========== PDF UPLOAD (ULTRA HD) ==========
     async function loadHighQualityPDF(file) {
         const data = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data }).promise;
         const page = await pdf.getPage(1);
         
-        // Get high quality viewport (scale 2 for better quality)
-        const viewport = page.getViewport({ scale: 2 });
+        // High quality rendering at 2.5x scale
+        const viewport = page.getViewport({ scale: 2.5 });
         const width = viewport.width;
         const height = viewport.height;
         
-        // Set canvas to full PDF size
         setCanvasSize(width, height);
         
-        // Clear and render PDF at high quality
         bgCtx.fillStyle = 'white';
         bgCtx.fillRect(0, 0, width, height);
         await page.render({ canvasContext: bgCtx, viewport }).promise;
         
         redrawAll();
         saveHistory();
-        document.getElementById('topStatus').innerHTML = `📄 PDF Loaded (${Math.round(width)}x${Math.round(height)})`;
-        document.getElementById('bottomStatus').innerHTML = `Zoom: 1.00x | PDF Quality: HD`;
+        document.getElementById('topStatus').innerHTML = `📄 4K PDF (${Math.round(width)}x${Math.round(height)})`;
+        document.getElementById('bottomStatus').innerHTML = `Zoom: 1.00x | 4K Quality Active`;
     }
 
     // ========== TOOL FUNCTIONS ==========
@@ -1027,10 +1210,15 @@
         redrawAll();
     };
     
+    document.getElementById('smoothnessSlider').oninput = (e) => {
+        smoothness = parseInt(e.target.value);
+        document.getElementById('smoothnessLabel').innerHTML = smoothness >= 7 ? 'Butter' : (smoothness >= 4 ? 'Smooth' : 'Sharp');
+    };
+    
     document.getElementById('textBtn').onclick = () => {
         const t = prompt('Enter text:', 'Text');
         if (t) {
-            objects.push({ type: 'text', text: t, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: penSize*5, color: penColor });
+            objects.push({ type: 'text', text: t, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: penSize*6, color: penColor });
             redrawAll(); saveHistory();
         }
     };
@@ -1057,6 +1245,8 @@
     document.getElementById('redoBtn').onclick = redo;
     document.getElementById('clearBtn').onclick = () => {
         drawCtx.clearRect(0,0,drawLayer.width,drawLayer.height);
+        drawCtx.fillStyle = 'white';
+        drawCtx.fillRect(0,0,drawLayer.width,drawLayer.height);
         highlighterCtx.clearRect(0,0,highlighterLayer.width,highlighterLayer.height);
         objects = []; selectedObjectIndex = -1;
         redrawAll(); saveHistory();
@@ -1067,7 +1257,7 @@
     document.getElementById('themeBtn').onclick = () => document.body.classList.toggle('light');
     document.getElementById('exportImgBtn').onclick = () => { 
         const a = document.createElement('a'); 
-        a.download = 'whiteboard-hd.png'; 
+        a.download = 'whiteboard-4k.png'; 
         a.href = topCanvas.toDataURL('image/png'); 
         a.click(); 
     };
@@ -1104,8 +1294,8 @@
         if (!file) return;
         const img = new Image();
         img.onload = () => {
-            const maxW = bgCanvas.width * 0.4;
-            const maxH = bgCanvas.height * 0.4;
+            const maxW = bgCanvas.width * 0.5;
+            const maxH = bgCanvas.height * 0.5;
             let w = img.width, h = img.height;
             if (w > maxW) { h = (h * maxW) / w; w = maxW; }
             if (h > maxH) { w = (w * maxH) / h; h = maxH; }
@@ -1120,7 +1310,7 @@
     document.getElementById('insertLatexBtn').onclick = () => {
         const latex = document.getElementById('latexInput').value.trim();
         if (latex) {
-            objects.push({ type: 'text', text: `$${latex}$`, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: 24, color: penColor });
+            objects.push({ type: 'text', text: `$${latex}$`, x: bgCanvas.width/2, y: bgCanvas.height/2, fontSize: 28, color: penColor });
             redrawAll(); saveHistory();
         }
         document.getElementById('latexModal').style.display = 'none';
@@ -1138,14 +1328,17 @@
     bottomCanvas.addEventListener('touchmove', (e) => { if (e.touches.length === 1) handleMove(e); }, { passive: false });
     bottomCanvas.addEventListener('touchend', handleUp);
     
-    // Initialize
+    // Initialize with 4K resolution
     initZoomAndPan();
-    setCanvasSize(1600, 1000);
+    setCanvasSize(2560, 1600);
     bgCtx.fillStyle = 'white';
-    bgCtx.fillRect(0, 0, 1600, 1000);
+    bgCtx.fillRect(0, 0, 2560, 1600);
+    drawCtx.fillStyle = 'white';
+    drawCtx.fillRect(0, 0, 2560, 1600);
     saveHistory();
     redrawAll();
-    console.log('✅ Whiteboard Pro ready! Features: HD PDF, Image Resize, HD Recording');
+    
+    console.log('✅ Whiteboard Ultra HD Ready! Features: 4K Canvas, Smooth Handwriting, High Quality PDF');
 </script>
 </body>
 </html>
