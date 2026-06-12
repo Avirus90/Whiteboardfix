@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>Whiteboard Pro – HD Recording with Mic Audio | Crystal Handwriting</title>
+    <title>Whiteboard Pro – High Quality PDF + Image Resize + HD Recording</title>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -58,8 +58,7 @@
         button.danger { background: #c0392b; }
         button.accent2 { background: #8e44ad; }
         button.success { background: #27ae60; }
-        button.mic-active { background: #27ae60; animation: pulse 0.5s infinite; }
-        @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+        button.mic-active { background-color: #27ae60; }
         input[type="color"] { width: 32px; height: 32px; border-radius: 50%; border: 2px solid white; cursor: pointer; padding: 2px; }
         input[type="range"] { width: 70px; accent-color: var(--accent); }
         input[type="number"] { width: 50px; padding: 4px; border-radius: 12px; border: none; text-align: center; background: var(--surface); color: var(--text); }
@@ -81,9 +80,8 @@
         }
         canvas { display: block; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: crosshair; }
         .status {
-            position: absolute; bottom: 4px; right: 8px; background: rgba(0,0,0,0.75); color: white;
-            padding: 4px 12px; border-radius: 20px; font-size: 11px; pointer-events: none; z-index: 5;
-            font-family: monospace;
+            position: absolute; bottom: 4px; right: 8px; background: rgba(0,0,0,0.65); color: white;
+            padding: 2px 10px; border-radius: 14px; font-size: 10px; pointer-events: none; z-index: 5;
         }
         .slide-sidebar {
             position: fixed; right: -360px; top: 0; width: 350px; height: 100vh;
@@ -113,35 +111,58 @@
         }
         .recording-indicator {
             position: fixed; top: 10px; right: 10px; background: #e74c3c; color: white;
-            padding: 4px 12px; border-radius: 20px; font-size: 11px; animation: pulseRed 1s infinite;
+            padding: 4px 12px; border-radius: 20px; font-size: 11px; animation: pulse 1s infinite;
             display: none; z-index: 2000; font-weight: bold;
         }
-        @keyframes pulseRed { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
         .info-banner {
             position: fixed; bottom: 20px; left: 20px; background: #2c3e50; color: #ffd700;
             padding: 6px 14px; border-radius: 20px; font-size: 11px; z-index: 1600;
             font-weight: bold; pointer-events: none;
         }
         .polygon-input-group {
-            display: flex; gap: 4px; align-items: center;
-            background: var(--surface2); padding: 4px 8px; border-radius: 20px;
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: var(--surface2);
+            padding: 4px 8px;
+            border-radius: 20px;
         }
-        .polygon-input-group input { width: 45px; padding: 4px; border-radius: 12px; background: var(--surface); color: var(--text); text-align: center; }
+        .polygon-input-group input {
+            width: 45px;
+            padding: 4px;
+            border-radius: 12px;
+            border: none;
+            text-align: center;
+            background: var(--surface);
+            color: var(--text);
+        }
         .zoom-controls {
-            background: var(--surface2); padding: 2px 8px; border-radius: 20px;
-            display: flex; gap: 4px;
+            background: var(--surface2);
+            padding: 2px 8px;
+            border-radius: 20px;
+            display: flex;
+            gap: 4px;
         }
-        .zoom-controls button { padding: 4px 10px; font-size: 12px; }
-        .mic-badge { background: #27ae60; border-radius: 50%; width: 10px; height: 10px; display: inline-block; margin-left: 5px; }
-        .mic-badge.active { animation: pulseMic 0.5s infinite; }
-        @keyframes pulseMic { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 1; transform: scale(1.2); } }
+        .zoom-controls button {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+        .quality-badge {
+            background: #2c3e50;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: normal;
+        }
     </style>
 </head>
 <body>
 
-<div class="recording-indicator" id="recIndicator">🔴 RECORDING (Video + Audio)</div>
-<div class="info-banner" id="infoBanner">🎤 MIC FIXED: Click Mic first → then Rec button → Video with Audio will download!</div>
+<div class="recording-indicator" id="recIndicator">🔴 RECORDING (HD)</div>
+<div class="info-banner" id="infoBanner">📌 PDF: High Quality Render | Image: Resizable in Edit Mode | Recording: HD Video + Audio (Click Mic first)</div>
 
+<!-- Middle Toolbar -->
 <div class="middle-toolbar" id="middleToolbar">
     <div class="tool-group">
         <div class="color-palette" id="colorPalette"></div>
@@ -193,8 +214,8 @@
         <label for="pdfFile" class="file-label">📄 PDF (HD)</label>
         <input type="file" id="imgFile" accept="image/*" style="display:none">
         <label for="imgFile" class="file-label">🖼️ Img</label>
-        <button id="recordBtn" class="danger">🔴 Rec + Audio</button>
-        <button id="micBtn">🎙️ Mic OFF <span id="micDot" class="mic-badge"></span></button>
+        <button id="recordBtn" class="danger">🔴 Rec HD</button>
+        <button id="micBtn">🎙️ Mic</button>
         <button id="undoBtn">↩️</button>
         <button id="redoBtn">↪️</button>
         <button id="clearBtn" class="danger">🗑️ Clear</button>
@@ -204,6 +225,7 @@
     </div>
 </div>
 
+<!-- Main Layout -->
 <div class="main-layout">
     <div class="canvas-card">
         <div class="card-header">📄 MASTER VIEW (Fixed)</div>
@@ -213,7 +235,7 @@
         </div>
     </div>
     <div class="canvas-card">
-        <div class="card-header">✍️ INTERACTIVE CANVAS (Zoom: 0.2x–12x | Pan: Right-Click | Pinch: Two Fingers)</div>
+        <div class="card-header">✍️ INTERACTIVE CANVAS (Zoom: 0.2x–12x | Pan: Right-Click Drag | Pinch: Two Fingers | Edit Mode: Resize Images)</div>
         <div class="canvas-container" id="bottomContainer">
             <canvas id="bottomCanvas"></canvas>
             <div class="status" id="bottomStatus">Zoom: 1.00x | Mode: Draw</div>
@@ -221,12 +243,14 @@
     </div>
 </div>
 
+<!-- Slide Sidebar -->
 <div class="slide-sidebar" id="slideSidebar">
     <div class="slide-title"><span>📚 SLIDES / PAGES</span><button class="close-slide" id="closeSlideBtn">✕</button></div>
     <div class="slide-list" id="slideList"><div style="text-align:center;padding:30px;color:gray;">No slides loaded.</div></div>
 </div>
 <button class="toggle-slide-btn" id="toggleSlideBtn">📋</button>
 
+<!-- LaTeX Modal -->
 <div id="latexModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:2000;justify-content:center;align-items:center;">
     <div style="background:white;padding:20px;border-radius:16px;min-width:350px;color:#1a1a2e;">
         <h3>📐 Insert LaTeX</h3>
@@ -260,11 +284,17 @@
     let penSize = 4;
     let opacity = 1;
     
-    let scale = 1, offsetX = 0, offsetY = 0;
-    const MIN_ZOOM = 0.2, MAX_ZOOM = 12;
+    // Pan & Zoom State (Range: 0.2 to 12)
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+    const MIN_ZOOM = 0.2;
+    const MAX_ZOOM = 12;
 
     let objects = [];
-    let editingEnabled = false, vertexEditEnabled = false, selectedObjectIndex = -1;
+    let editingEnabled = false;
+    let vertexEditEnabled = false;
+    let selectedObjectIndex = -1;
     let history = [], historyIndex = -1;
 
     let drawing = false, lastX = 0, lastY = 0, smoothPoints = [];
@@ -276,15 +306,21 @@
     let isRotating = false, rotateStartAngle = 0;
     let isDraggingVertex = false, vertexIndex = -1;
 
-    let isPanning = false, panStartX = 0, panStartY = 0, panStartOffsetX = 0, panStartOffsetY = 0;
-    let pinchDist = 0, pinchMid = { x: 0, y: 0 }, isPinching = false;
+    // Panning state
+    let isPanning = false;
+    let panStartX = 0, panStartY = 0;
+    let panStartOffsetX = 0, panStartOffsetY = 0;
 
-    // Recording with Audio
+    // Pinch state
+    let pinchDist = 0;
+    let pinchMid = { x: 0, y: 0 };
+    let isPinching = false;
+
+    // Recording with mic
     let mediaRecorder = null, recordedChunks = [], isRecording = false;
-    let canvasStream = null;
+    let recordingStream = null;
     let audioStream = null;
     let isMicEnabled = false;
-    let combinedStream = null;
 
     // ========== HELPER FUNCTIONS ==========
     function setCanvasSize(w, h) {
@@ -337,7 +373,8 @@
 
     function hitTestObject(px, py) {
         for (let i = objects.length - 1; i >= 0; i--) {
-            const b = getObjectBounds(objects[i]);
+            const obj = objects[i];
+            const b = getObjectBounds(obj);
             if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return i;
         }
         return -1;
@@ -347,7 +384,8 @@
         if (!obj.points) return -1;
         const threshold = Math.max(15 / scale, 18);
         for (let i = 0; i < obj.points.length; i++) {
-            if (Math.hypot(px - obj.points[i].x, py - obj.points[i].y) < threshold) return i;
+            const p = obj.points[i];
+            if (Math.hypot(px - p.x, py - p.y) < threshold) return i;
         }
         return -1;
     }
@@ -432,7 +470,9 @@
             ctx.closePath();
             ctx.stroke();
         }
-        else if (obj.type === 'image' && obj.img) { ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h); }
+        else if (obj.type === 'image' && obj.img) {
+            ctx.drawImage(obj.img, obj.x, obj.y, obj.w, obj.h);
+        }
         else if (obj.type === 'text') {
             ctx.font = `${obj.fontSize || 20}px "Segoe UI"`;
             ctx.fillStyle = obj.color || penColor;
@@ -443,6 +483,7 @@
 
     function drawSelectionHandles(ctx, obj) {
         const b = getObjectBounds(obj);
+        
         if (vertexEditEnabled && obj.points && obj.points.length > 0) {
             ctx.fillStyle = '#00bbff';
             ctx.strokeStyle = '#fff';
@@ -455,17 +496,20 @@
             }
             return;
         }
+        
         ctx.save();
         ctx.strokeStyle = '#ffd700';
         ctx.lineWidth = 2.5 / scale;
         ctx.setLineDash([8/scale, 5/scale]);
         ctx.strokeRect(b.x, b.y, b.w, b.h);
         ctx.setLineDash([]);
+        
         const hSize = Math.max(12 / scale, 14);
         ctx.fillStyle = '#ffd700';
         [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]].forEach(([cx, cy]) => {
             ctx.fillRect(cx - hSize/2, cy - hSize/2, hSize, hSize);
         });
+        
         ctx.fillStyle = '#e74c3c';
         ctx.beginPath();
         ctx.arc(b.x + b.w/2, b.y - 22/scale, hSize/1.5, 0, 2*Math.PI);
@@ -496,7 +540,7 @@
         }
 
         const mode = vertexEditEnabled ? '✏️ Vertex Edit' : (editingEnabled ? '🔧 Edit' : '✏️ Draw');
-        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${mode} | 🎤 ${isMicEnabled ? 'ON' : 'OFF'}`;
+        document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${mode}`;
         document.getElementById('objectActionGroup').style.display = (selectedObjectIndex >= 0) ? 'inline' : 'none';
     }
 
@@ -539,7 +583,8 @@
         const p = getCanvasCoords(e);
 
         if (vertexEditEnabled && selectedObjectIndex >= 0 && objects[selectedObjectIndex]) {
-            const vertexIdx = hitTestVertex(objects[selectedObjectIndex], p.x, p.y);
+            const obj = objects[selectedObjectIndex];
+            const vertexIdx = hitTestVertex(obj, p.x, p.y);
             if (vertexIdx >= 0) { isDraggingVertex = true; vertexIndex = vertexIdx; return; }
         }
 
@@ -547,12 +592,14 @@
             const obj = objects[selectedObjectIndex];
             const b = getObjectBounds(obj);
             const hSize = Math.max(12 / scale, 14);
+            
             const rotCenter = { x: b.x + b.w/2, y: b.y - 22/scale };
             if (Math.hypot(p.x - rotCenter.x, p.y - rotCenter.y) < hSize) {
                 isRotating = true;
                 rotateStartAngle = Math.atan2(p.y - b.cy, p.x - b.cx);
                 return;
             }
+            
             const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]];
             for (let i = 0; i < corners.length; i++) {
                 if (Math.abs(p.x - corners[i][0]) < hSize && Math.abs(p.y - corners[i][1]) < hSize) {
@@ -563,6 +610,7 @@
                     return;
                 }
             }
+            
             if (hitTestObject(p.x, p.y) === selectedObjectIndex) {
                 isDraggingObject = true;
                 dragStartX = p.x; dragStartY = p.y;
@@ -625,7 +673,8 @@
         if (isResizing && selectedObjectIndex >= 0) {
             const p = getCanvasCoords(e);
             const obj = objects[selectedObjectIndex];
-            const dx = p.x - dragStartX, dy = p.y - dragStartY;
+            const dx = p.x - dragStartX;
+            const dy = p.y - dragStartY;
             const orig = resizeStartBounds;
             
             if (obj.type === 'rect') {
@@ -872,176 +921,114 @@
             }
         }, { passive: false });
         
-        bottomCanvas.addEventListener('touchend', () => { isPinching = false; pinchDist = 0; });
+        bottomCanvas.addEventListener('touchend', (e) => { if (e.touches.length < 2) { isPinching = false; pinchDist = 0; } });
     }
 
-    // ========== MICROPHONE FUNCTION (FIXED) ==========
-    async function toggleMicrophone() {
-        const micBtn = document.getElementById('micBtn');
-        const micDot = document.getElementById('micDot');
-        
-        if (isMicEnabled && audioStream) {
-            // Turn OFF mic
-            audioStream.getTracks().forEach(track => {
-                track.stop();
-            });
-            audioStream = null;
-            isMicEnabled = false;
-            micBtn.innerHTML = '🎙️ Mic OFF ';
-            micBtn.classList.remove('mic-active');
-            micDot.classList.remove('active');
-            micBtn.style.background = 'var(--accent)';
-            document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${editingEnabled ? 'Edit' : 'Draw'} | Mic: OFF`;
-        } else {
-            // Turn ON mic
-            try {
-                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                isMicEnabled = true;
-                micBtn.innerHTML = '🎙️ Mic ON ✓';
-                micBtn.classList.add('mic-active');
-                micDot.classList.add('active');
-                micBtn.style.background = '#27ae60';
-                document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${editingEnabled ? 'Edit' : 'Draw'} | Mic: ON ✓`;
-                
-                // Test if audio is working
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaStreamSource(audioStream);
-                const analyser = audioContext.createAnalyser();
-                source.connect(analyser);
-                console.log('✅ Microphone connected and ready for recording');
-            } catch(e) {
-                alert('Microphone access denied. Please allow microphone permission.');
-                console.error('Mic error:', e);
-                isMicEnabled = false;
-                micBtn.innerHTML = '🎙️ Mic OFF';
-                micBtn.classList.remove('mic-active');
-                micDot.classList.remove('active');
-                micBtn.style.background = 'var(--accent)';
-            }
-        }
-    }
-
-    // ========== RECORDING WITH AUDIO (FIXED) ==========
+    // ========== HD RECORDING WITH MIC (FIXED) ==========
     async function toggleRecording() {
         if (isRecording) {
-            // Stop recording
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            if (canvasStream) {
-                canvasStream.getTracks().forEach(track => track.stop());
-            }
-            if (combinedStream) {
-                combinedStream.getTracks().forEach(track => track.stop());
-            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
             isRecording = false;
             document.getElementById('recIndicator').style.display = 'none';
-            document.getElementById('recordBtn').innerHTML = '🔴 Rec + Audio';
-            document.getElementById('recordBtn').style.background = '#c0392b';
+            document.getElementById('recordBtn').innerHTML = '🔴 Rec HD';
             return;
         }
-        
         try {
             // Get canvas stream
-            canvasStream = topCanvas.captureStream(30);
+            const canvasStream = topCanvas.captureStream(30);
+            let finalStream = canvasStream;
             
-            let finalStream;
-            
-            // If mic is enabled, combine both streams
+            // If mic is enabled, combine audio
             if (isMicEnabled && audioStream && audioStream.active) {
                 const audioTracks = audioStream.getAudioTracks();
-                const videoTracks = canvasStream.getVideoTracks();
-                
-                if (audioTracks.length > 0 && videoTracks.length > 0) {
-                    finalStream = new MediaStream([...videoTracks, ...audioTracks]);
-                    console.log('✅ Combined stream created with video + audio');
+                if (audioTracks.length > 0) {
+                    finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+                    console.log('✅ Recording with microphone audio');
                 } else {
-                    finalStream = canvasStream;
-                    console.warn('⚠️ Audio tracks not available, recording video only');
+                    console.warn('No audio tracks available');
                 }
             } else {
-                finalStream = canvasStream;
-                console.log('ℹ️ Recording video only (mic not enabled)');
-                if (!isMicEnabled) {
-                    alert('Mic is OFF. Recording video only. Click Mic button first to record with audio.');
-                }
+                console.log('Recording without microphone (mic not enabled)');
             }
             
-            combinedStream = finalStream;
-            
-            // Check if MediaRecorder supports this mimeType
-            const mimeTypes = ['video/webm', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/mp4'];
-            let selectedMimeType = '';
-            for (const mime of mimeTypes) {
-                if (MediaRecorder.isTypeSupported(mime)) {
-                    selectedMimeType = mime;
-                    break;
-                }
-            }
-            
-            const options = { 
-                mimeType: selectedMimeType || 'video/webm',
-                videoBitsPerSecond: 5000000 
-            };
-            
+            recordingStream = finalStream;
+            const options = { mimeType: 'video/webm', videoBitsPerSecond: 5000000 };
             mediaRecorder = new MediaRecorder(finalStream, options);
             recordedChunks = [];
             
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data && event.data.size > 0) {
-                    recordedChunks.push(event.data);
-                }
-            };
-            
+            mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
                 const blob = new Blob(recordedChunks, { type: 'video/webm' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');
-                a.download = `whiteboard-${timestamp}.webm`;
                 a.href = url;
+                a.download = `whiteboard-hd-${Date.now()}.webm`;
                 a.click();
                 URL.revokeObjectURL(url);
-                console.log(`✅ Recording saved: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
-                
-                // Clean up
-                if (canvasStream) canvasStream.getTracks().forEach(t => t.stop());
-                if (combinedStream) combinedStream.getTracks().forEach(t => t.stop());
-                canvasStream = null;
-                combinedStream = null;
+                if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
             };
             
             mediaRecorder.start(1000);
             isRecording = true;
             document.getElementById('recIndicator').style.display = 'block';
-            document.getElementById('recordBtn').innerHTML = '⏹️ Stop Recording';
-            document.getElementById('recordBtn').style.background = '#e74c3c';
-            console.log('🔴 Recording started with audio:', isMicEnabled);
-            
-        } catch(error) {
-            console.error('Recording error:', error);
-            alert('Recording failed: ' + error.message);
-            isRecording = false;
-            document.getElementById('recIndicator').style.display = 'none';
-            document.getElementById('recordBtn').innerHTML = '🔴 Rec + Audio';
+            document.getElementById('recordBtn').innerHTML = '⏹️ Stop HD';
+        } catch (e) { alert('Recording error: ' + e.message); }
+    }
+
+    // ========== MICROPHONE TOGGLE (FIXED) ==========
+    async function toggleMicrophone() {
+        const micBtn = document.getElementById('micBtn');
+        if (isMicEnabled && audioStream) {
+            // Turn off mic
+            audioStream.getTracks().forEach(track => track.stop());
+            audioStream = null;
+            isMicEnabled = false;
+            micBtn.textContent = '🎙️ Mic';
+            micBtn.classList.remove('mic-active');
+            document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${editingEnabled ? 'Edit' : 'Draw'} | Mic: OFF`;
+        } else {
+            // Turn on mic
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioStream = stream;
+                isMicEnabled = true;
+                micBtn.textContent = '🎙️ Mic ON';
+                micBtn.classList.add('mic-active');
+                document.getElementById('bottomStatus').innerHTML = `Zoom: ${scale.toFixed(2)}x | Mode: ${editingEnabled ? 'Edit' : 'Draw'} | Mic: ON ✓`;
+            } catch(e) {
+                alert('Microphone access denied. Please allow microphone permission.');
+                console.error('Mic error:', e);
+                isMicEnabled = false;
+                micBtn.textContent = '🎙️ Mic';
+                micBtn.classList.remove('mic-active');
+            }
         }
     }
 
-    // ========== PDF UPLOAD ==========
+    // ========== PDF UPLOAD (HIGH QUALITY) ==========
     async function loadHighQualityPDF(file) {
         const data = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data }).promise;
         const page = await pdf.getPage(1);
+        
+        // Get high quality viewport (scale 2 for better quality)
         const viewport = page.getViewport({ scale: 2 });
         const width = viewport.width;
         const height = viewport.height;
+        
+        // Set canvas to full PDF size
         setCanvasSize(width, height);
+        
+        // Clear and render PDF at high quality
         bgCtx.fillStyle = 'white';
         bgCtx.fillRect(0, 0, width, height);
         await page.render({ canvasContext: bgCtx, viewport }).promise;
+        
         redrawAll();
         saveHistory();
         document.getElementById('topStatus').innerHTML = `📄 PDF Loaded (${Math.round(width)}x${Math.round(height)})`;
+        document.getElementById('bottomStatus').innerHTML = `Zoom: 1.00x | PDF Quality: HD`;
     }
 
     // ========== TOOL FUNCTIONS ==========
@@ -1157,7 +1144,8 @@
         if (!file) return;
         const img = new Image();
         img.onload = () => {
-            const maxW = bgCanvas.width * 0.4, maxH = bgCanvas.height * 0.4;
+            const maxW = bgCanvas.width * 0.4;
+            const maxH = bgCanvas.height * 0.4;
             let w = img.width, h = img.height;
             if (w > maxW) { h = (h * maxW) / w; w = maxW; }
             if (h > maxH) { w = (w * maxH) / h; h = maxH; }
@@ -1197,7 +1185,7 @@
     bgCtx.fillRect(0, 0, 1600, 1000);
     saveHistory();
     redrawAll();
-    console.log('✅ Whiteboard Pro ready! Mic + Recording fixed!');
+    console.log('✅ Whiteboard Pro ready! Features: HD PDF, Image Resize, HD Recording with MIC (fixed)');
 </script>
 </body>
 </html>
